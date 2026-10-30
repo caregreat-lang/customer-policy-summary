@@ -1,7 +1,7 @@
 ﻿// Keeps the app working offline. Network first, so updates show up as soon as the phone is online.
 // Only the app's own files are cached; Excel files you open never leave the phone.
-const CACHE = 'cps-20261030153602';
-const FILES = ['./', 'index.html', 'xlsx.full.min.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
+const CACHE = 'cps-20261030154815';
+const FILES = ['./', 'index.html', 'xlsx.full.min.js', 'pdf.min.js', 'pdf.worker.min.js','manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
