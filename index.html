@@ -240,7 +240,7 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
 /* ================= configuration ================= */
 const AREAS=['life','ci','medical','savings','retirement'];
 const AREA_EN={life:'Life / Death',ci:'Critical Illness',medical:'Medical / Hospital',savings:'Education / Savings',retirement:'Retirement'};
-const STATUSES=['Active','Proposed','Lapsed','Surrendered','Matured'];
+const STATUSES=['Active','Proposed','Lapsed','Terminated','Surrendered','Matured'];
 const FREQS={Monthly:12,Quarterly:4,'Half-yearly':2,Yearly:1,Single:0};
 const PALETTE=['#2f6fbf','#1e8e5a','#c98a0b','#8e44ad','#c8372d','#16a2b8','#6c7a89'];
 
@@ -308,7 +308,7 @@ function toDate(v){
   const d=new Date(s);return isNaN(d)?'':isoDate(d);
 }
 function normFreq(v){const s=normKey(v);if(!s)return'Yearly';if(s.startsWith('month'))return'Monthly';if(s.startsWith('quart'))return'Quarterly';if(s.startsWith('half')||s.startsWith('semi'))return'Half-yearly';if(s.startsWith('single')||s.startsWith('lump')||s==='sp')return'Single';return'Yearly'}
-function normStatus(v){const s=normKey(v);if(!s||s.startsWith('inforce')||s.startsWith('active'))return'Active';if(s.startsWith('laps'))return'Lapsed';if(s.startsWith('surr'))return'Surrendered';if(s.startsWith('matur'))return'Matured';if(s.startsWith('prop')||s.startsWith('pend'))return'Proposed';return'Active'}
+function normStatus(v){const s=normKey(v);if(!s||s.startsWith('inforce')||s.startsWith('active'))return'Active';if(s.startsWith('laps'))return'Lapsed';if(s.startsWith('surr'))return'Surrendered';if(s.startsWith('matur'))return'Matured';if(/^(terminat|cancel|void|claim|death|deceas|expir|ntu|notakenup|declin|withdr|freelook)/.test(s))return'Terminated';if(s.startsWith('prop')||s.startsWith('pend'))return'Proposed';return'Active'}
 const isActive=p=>p.status==='Active';
 const annualPrem=p=>(p.premium||0)*(FREQS[p.frequency]??1);
 
@@ -439,31 +439,38 @@ function pdfEPartnerRows(pages){
     if(/^(ILP FUND DETAILS|POLICY VALUES|The 'Annual|Please refer)/i.test(l[0]?.s||''))break;
     const money=t.match(/\d{1,3}(?:,\d{3})*\.\d{2}/g)||[],dates=t.match(/\d{2}\/\d{2}\/\d{4}/g)||[];
     if(money.length&&dates.length>=2){
-      benefits.push({name:((l[0].s.match(/^[A-Za-z][A-Za-z &\-\/]*[A-Za-z]/)||[''])[0]).trim(),sa:toNum(money[0]),
-        end:dates.map(toDate).sort().pop()});
+      benefits.push({name:((l[0].s.match(/^[A-Za-z][A-Za-z &\-\/]*[A-Za-z]/)||[''])[0]).trim(),sa:toNum(money[0]),prem:toNum(money[1]||0),
+        end:dates.map(toDate).sort().pop(),ilp:/\(ILP/i.test(t)});
     }else if(benefits.length&&/^[A-Z][A-Z &\-\/]*$/.test(l[0]?.s||'')){benefits[benefits.length-1].name+=' '+l[0].s}
   }
   const cover={life:0,ci:0,medical:0};
   benefits.forEach((b,i)=>{const a=benefitArea(b.name,i===0);if(a)cover[a]+=b.sa});
-  // nominees: right-hand columns (Relationship, Name) under NOMINEE INFORMATION
-  const noms=[],rels=[];
+  // nominees: right-hand columns (Relationship, Name) under NOMINEE INFORMATION;
+  // assignee/trustee: left-hand columns (Role, Name), used when there is no nominee
+  const noms=[],rels=[],assignees=[];
   const hi=lines.findIndex((l,i)=>i>0&&/NOMINEE INFORMATION/i.test(txt(lines[i-1]))&&l.some(c=>/^relationship$/i.test(c.s)));
   if(hi>=0){
     const h=lines[hi],relX=h.find(c=>/^relationship$/i.test(c.s)).x,nameX=h.filter(c=>/^name$/i.test(c.s)).pop()?.x??relX+100;
+    const vcX=h.find(c=>/^vc$/i.test(c.s))?.x,split=vcX!==undefined&&vcX<relX?(vcX+relX)/2:relX-30;   // left = assignee/trustee, right = nominee
     for(let i=hi+1;i<lines.length;i++){
       const l=lines[i];if(/^(Trust Created|\*Explanatory|ALTERNATE|AGENT)/i.test(l[0]?.s||''))break;
-      let r='',n='';
-      l.forEach(c=>{if(c.x<relX-30)return;Math.abs(c.x-relX)<Math.abs(c.x-nameX)?r=c.s:n=c.s});
+      let r='',n='';const left=l.filter(c=>c.x<split);
+      l.forEach(c=>{if(c.x<split)return;Math.abs(c.x-relX)<Math.abs(c.x-nameX)?r=c.s:n=c.s});
       if(n){noms.push(n);rels.push(r)}
+      if(left.length>=2&&!/^[YN]$/.test(left[1].s))assignees.push({role:left[0].s,name:left[1].s});
     }
   }
+  if(!noms.length)assignees.forEach(a=>{noms.push(`${a.name} (${a.role})`);rels.push(a.role)});
   const all=lines.map(txt).join('\n');
+  const totalPrem=toNum(val('Total Installment Premium')||val('Installment Premium'));
   const row={};COLS.forEach(c=>row[c[1]]='');
   Object.assign(row,{'Client ID':ic||name,'Client Name':name,'Age':age,'Policy No':policyNo,
     'Plan Name':(benefits[0]?.name||'')+(benefits.length>1?` (+${benefits.length-1} rider${benefits.length>2?'s':''})`:''),
-    'Policy Type':/\bILP\b|INVESTMENT/i.test(all)?'Investment-linked':'',
+    // the page's menu always mentions ILP, so look for real fund holdings or "(ILP lapse)" status instead
+    'Policy Type':/^ILP FUND DETAILS/im.test(all)||benefits.some(b=>b.ilp)?'Investment-linked':'Traditional',
     'Life Cover':cover.life,'CI Cover':cover.ci,'Medical Limit':cover.medical,
-    'Premium':val('Total Installment Premium')||val('Installment Premium'),'Frequency':val('Payment Frequency'),
+    // a fully paid or terminated policy shows 0.00 in total: fall back to the plan's own premiums
+    'Premium':totalPrem||benefits.reduce((s,b)=>s+b.prem,0),'Frequency':val('Payment Frequency'),
     'Nominee':noms.join(', '),'Nominee Relationship':rels.join(', '),
     'Start Date':val('Risk Commencement Date')||val('Policy Issue Date'),'Maturity Date':benefits[0]?.end?fmtDate(benefits[0].end):'',
     'Status':val('Policy Status')});
@@ -581,6 +588,7 @@ function analyse(c){
   areas.forEach(a=>{if(a.status==='gap'||a.status==='partial')actions.push({k:'act_'+a.key,v:a.shortfall,sev:a.status})});
   act.forEach(p=>{if(!p.nominee)actions.push({k:'act_nominee',v:p.policyNo,sev:'gap'})});
   c.policies.filter(p=>p.status==='Lapsed').forEach(p=>actions.push({k:'act_lapsed',v:p.policyNo,sev:'partial'}));
+  c.policies.filter(p=>p.status==='Terminated').forEach(p=>actions.push({k:'act_terminated',v:p.policyNo,sev:'gap'}));
   if(inc&&annual/inc>.15)actions.push({k:'act_afford',sev:'partial'});
   const scored=areas.filter(a=>a.pct!==null);
   const score=scored.length?Math.round(scored.reduce((s,a)=>s+Math.min(a.pct,1),0)/scored.length*100):0;
@@ -856,12 +864,12 @@ en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review 
  sigClient:'Client signature / date',sigAdvisor:'Advisor signature / date',none:'Not stated',
  disclaimer:'This summary is for discussion purposes only and is based on information available on the review date. Recommended levels are general guidelines, not financial advice; please refer to your policy contracts for full terms and conditions.',
  cv:{life:'Life',ci:'CI',medical:'Medical',savings:'Savings',retirement:'Retirement'},
- stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured'},
+ stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured',Terminated:'Terminated'},
  freq:{Monthly:'monthly',Quarterly:'quarterly','Half-yearly':'half-yearly',Yearly:'yearly',Single:'single'},
  field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Medical limit',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date',income:'Annual income',dependants:'Dependants',clientName:'Client name',clientId:'Client ID'},
  act_life:a=>`Increase life protection by about ${a}`,act_ci:a=>`Increase critical illness protection by about ${a}`,act_medical:a=>`Increase medical / hospital coverage by about ${a} in annual limit`,
  act_savings:a=>`Build the education / savings fund by about ${a}`,act_retirement:a=>`Grow the retirement fund by about ${a}`,act_nominee:p=>`Appoint a nominee for policy ${p}`,
- act_lapsed:p=>`Consider reinstating lapsed policy ${p}`,act_afford:()=>'Premiums exceed 15% of income. Review affordability together.'},
+ act_lapsed:p=>`Consider reinstating lapsed policy ${p}`,act_terminated:p=>`Policy ${p} has ended; its cover no longer protects you. Review replacement cover.`,act_afford:()=>'Premiums exceed 15% of income. Review affordability together.'},
 zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日期',preparedBy:'理财顾问',glance:'您的保障一览',score:'整体保障评分',scoreHint:'衡量您目前的保障与各项建议水平的接近程度。',
  area_life:'人寿 / 身故',area_ci:'重大疾病',area_medical:'医疗 / 住院',area_savings:'教育 / 储蓄',area_retirement:'退休',
  youHave:'现有',recommended:'建议',notRequired:'无需',st_good:'保障充足',st_partial:'部分保障',st_gap:'保障缺口 — 需关注',st_na:'不适用',
@@ -872,12 +880,12 @@ zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日�
  sigClient:'客户签名 / 日期',sigAdvisor:'顾问签名 / 日期',none:'未填写',
  disclaimer:'本摘要仅供讨论用途，依据检视当日的资料编制。建议保障水平仅为一般参考，并非理财建议；完整条款与细则请以保单合约为准。',
  cv:{life:'寿险',ci:'重疾',medical:'医疗',savings:'储蓄',retirement:'退休'},
- stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期'},
+ stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期',Terminated:'已终止'},
  freq:{Monthly:'每月',Quarterly:'每季','Half-yearly':'每半年',Yearly:'每年',Single:'一次性'},
  field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'医疗限额',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期',income:'年收入',dependants:'受抚养人数',clientName:'客户姓名',clientId:'客户编号'},
  act_life:a=>`将人寿保障提高约 ${a}`,act_ci:a=>`将重大疾病保障提高约 ${a}`,act_medical:a=>`将医疗/住院年度限额提高约 ${a}`,
  act_savings:a=>`将教育/储蓄基金增加约 ${a}`,act_retirement:a=>`将退休基金增加约 ${a}`,act_nominee:p=>`为保单 ${p} 指定受益人`,
- act_lapsed:p=>`考虑恢复已失效的保单 ${p}`,act_afford:()=>'保费超过收入的15%，建议一起检视负担能力。'},
+ act_lapsed:p=>`考虑恢复已失效的保单 ${p}`,act_terminated:p=>`保单 ${p} 已终止，不再提供保障。建议检视替代保障。`,act_afford:()=>'保费超过收入的15%，建议一起检视负担能力。'},
 ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'Tarikh semakan',preparedBy:'Disediakan oleh',glance:'Perlindungan anda sepintas lalu',score:'Skor perlindungan keseluruhan',scoreHint:'Sejauh mana perlindungan semasa anda menghampiri tahap yang disyorkan bagi semua bidang.',
  area_life:'Hayat / Kematian',area_ci:'Penyakit Kritikal',area_medical:'Perubatan / Hospital',area_savings:'Pendidikan / Simpanan',area_retirement:'Persaraan',
  youHave:'Anda ada',recommended:'Disyorkan',notRequired:'Tidak diperlukan',st_good:'Perlindungan mencukupi',st_partial:'Perlindungan separa',st_gap:'Jurang: perlu perhatian',st_na:'Tidak berkenaan',
@@ -888,12 +896,12 @@ ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'
  sigClient:'Tandatangan pelanggan / tarikh',sigAdvisor:'Tandatangan perunding / tarikh',none:'Tiada',
  disclaimer:'Ringkasan ini untuk tujuan perbincangan sahaja dan berdasarkan maklumat pada tarikh semakan. Tahap yang disyorkan ialah panduan umum, bukan nasihat kewangan; sila rujuk kontrak polisi anda untuk terma dan syarat penuh.',
  cv:{life:'Hayat',ci:'PK',medical:'Perubatan',savings:'Simpanan',retirement:'Persaraan'},
- stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang'},
+ stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang',Terminated:'Ditamatkan'},
  freq:{Monthly:'bulanan',Quarterly:'suku tahunan','Half-yearly':'separuh tahunan',Yearly:'tahunan',Single:'sekali bayar'},
  field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had perubatan',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan',income:'Pendapatan tahunan',dependants:'Tanggungan',clientName:'Nama pelanggan',clientId:'ID pelanggan'},
  act_life:a=>`Tingkatkan perlindungan hayat sebanyak kira-kira ${a}`,act_ci:a=>`Tingkatkan perlindungan penyakit kritikal sebanyak kira-kira ${a}`,act_medical:a=>`Tingkatkan had tahunan perubatan/hospital sebanyak kira-kira ${a}`,
  act_savings:a=>`Tambah dana pendidikan/simpanan sebanyak kira-kira ${a}`,act_retirement:a=>`Tambah dana persaraan sebanyak kira-kira ${a}`,act_nominee:p=>`Lantik penama untuk polisi ${p}`,
- act_lapsed:p=>`Pertimbangkan untuk mengembalikan semula polisi luput ${p}`,act_afford:()=>'Premium melebihi 15% pendapatan. Semak kemampuan bersama.'}
+ act_lapsed:p=>`Pertimbangkan untuk mengembalikan semula polisi luput ${p}`,act_terminated:p=>`Polisi ${p} telah tamat dan tidak lagi melindungi anda. Semak perlindungan gantian.`,act_afford:()=>'Premium melebihi 15% pendapatan. Semak kemampuan bersama.'}
 };
 function actionText(a,lang){const fn=T[lang][a.k];return fn(typeof a.v==='number'?money(a.v):a.v)}
 function setLang(l){view.lang=l;renderReport()}
