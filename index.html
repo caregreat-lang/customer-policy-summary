@@ -103,6 +103,8 @@ tr.click:hover td{background:var(--soft)}
 .prof-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px}
 .prof-edit label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
 .prof-edit input{padding:6px 8px;border:1px solid var(--brand2);border-radius:6px;font-weight:600;min-width:200px}
+.drop-hint{margin:14px auto 0;max-width:640px;font-size:12.5px;color:var(--muted);border:1px dashed var(--line);border-radius:10px;padding:10px 14px;background:#fff}
+body.dropping::after{content:"Drop Excel or PDF files to load them";position:fixed;inset:12px;z-index:100;display:flex;align-items:center;justify-content:center;border:3px dashed var(--brand2);border-radius:16px;background:rgba(234,241,251,.92);color:var(--brand);font-size:22px;font-weight:700;pointer-events:none}
 .merge-hint{background:var(--partialbg);border-color:#f0d48a;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .merge-hint select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;max-width:100%;background:#fff}
 .cov-edit{margin-top:8px;padding:10px;border:1px dashed var(--brand2);border-radius:8px;background:var(--soft);display:grid;gap:8px}
@@ -197,7 +199,7 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#fff" opacity=".95"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#1f4e8c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div>Customer's Policy Summary<small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
   </div>
-  <label class="btn primary">📂 Load Excel / PDF<input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" hidden></label>
+  <label class="btn primary" title="You can select several PDFs at once, or drag them onto the window">📂 Load Excel / PDF<input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" hidden></label>
   <button class="btn" onclick="loadSample()">Try sample data</button>
   <button class="btn" onclick="downloadTemplate()">⬇ Excel template</button>
   <button class="btn" onclick="exportUpdated()">💾 Export updated Excel</button>
@@ -488,24 +490,38 @@ async function fileToPolicies(f,buf){
   return rowsToPolicies(rows);
 }
 // PDFs (one ePartner policy each) are added to the clients already loaded; Excel/CSV replaces the list
-$('#file').addEventListener('change',async e=>{
-  const files=[...e.target.files];if(!files.length)return;
-  const reading=files.map(f=>{const r=readFileNow(f);r.catch(()=>{});return r});
+const FILE_OK=/\.(xlsx|xls|csv|pdf)$/i;
+$('#file').addEventListener('change',e=>{const files=[...e.target.files];loadFiles(files);e.target.value=''});
+// drag and drop any number of files onto the window (PC)
+let dragDepth=0;
+window.addEventListener('dragenter',e=>{if(![...(e.dataTransfer?.types||[])].includes('Files'))return;e.preventDefault();dragDepth++;document.body.classList.add('dropping')});
+window.addEventListener('dragover',e=>{if([...(e.dataTransfer?.types||[])].includes('Files'))e.preventDefault()});
+window.addEventListener('dragleave',()=>{if(--dragDepth<=0){dragDepth=0;document.body.classList.remove('dropping')}});
+window.addEventListener('drop',e=>{
+  if(!e.dataTransfer?.files?.length)return;e.preventDefault();dragDepth=0;document.body.classList.remove('dropping');
+  const files=[...e.dataTransfer.files],ok=files.filter(f=>FILE_OK.test(f.name));
+  if(ok.length)loadFiles(ok,files.length-ok.length);else toast('Only Excel, CSV or PDF files can be loaded');
+});
+async function loadFiles(files,skipped=0){
+  if(!files.length)return;
+  const skipNote=skipped?` · skipped ${skipped} file${skipped===1?'':'s'} that ${skipped===1?'is':'are'} not Excel, CSV or PDF`:'';
+  const reading=files.map(f=>{const r=readFileNow(f);r.catch(()=>{});return r});   // start reading straight away (iPhone)
   const allPdf=files.every(isPdf),merge=allPdf&&policies.length&&!sampleLoaded;
-  if(!merge&&dirty&&!confirm('You have unsaved review changes. Load a new file anyway?')){e.target.value='';return}
-  if(allPdf)toast('Reading PDF…');
-  const list=[],failed=[];
+  if(!merge&&dirty&&!confirm('You have unsaved review changes. Load a new file anyway?'))return;
+  let list=[];const failed=[],blocked=[];
   for(let i=0;i<files.length;i++){
     const f=files[i];
+    if(files.length>1)toast(`Reading ${isPdf(f)?'PDF':'file'} ${i+1} of ${files.length}…`);else if(allPdf)toast('Reading PDF…');
     try{
       let buf;
-      try{buf=await reading[i]}
-      catch(err){alert('Your phone did not let the app open "'+f.name+'".\n\nOn iPhone: in WhatsApp, email or OneDrive, tap Share → Save to Files → On My iPhone. Then tap Load Excel / PDF, choose Browse → On My iPhone, and pick the file there.\n\n('+err.message+')');continue}
+      try{buf=await reading[i]}catch(err){blocked.push(f.name);continue}
       const got=await fileToPolicies(f,buf);
       got.length?list.push(...got):failed.push(f.name);
     }catch(err){failed.push(f.name+' ('+err.message+')')}
   }
-  e.target.value='';
+  // the same policy picked twice: keep the last one
+  list=list.filter((p,i)=>!p.policyNo||list.findLastIndex(q=>q.policyNo===p.policyNo)===i);
+  if(blocked.length)alert('Your phone did not let the app open:\n'+blocked.join('\n')+'\n\nOn iPhone: in WhatsApp, email or OneDrive, tap Share → Save to Files → On My iPhone. Then tap Load Excel / PDF, choose Browse → On My iPhone, and pick the files there.');
   if(failed.length)alert((list.length?'Some files could not be read:\n':'')+failed.join('\n')+'\n\n'+(allPdf?'No policy details found. The app reads ePartner "Policy Detail Information" printouts, PDF tables with headings like Policy No, Plan, Sum Assured, Premium, Nominee, and lines like "Policy No: …". Please send a sample of this PDF layout so it can be added, or use the Excel export.':'No policy rows found. Check the column headers match the template.'));
   if(!list.length)return;
   if(merge){
@@ -517,14 +533,15 @@ $('#file').addEventListener('change',async e=>{
       const j=policies.findIndex(q=>q.policyNo&&q.policyNo===p.policyNo);
       if(j>=0){if(!p.purpose)p.purpose=policies[j].purpose;policies[j]=p;updated++}else{policies.push(p);added++}});
     go(new Set(list.map(p=>p.clientId)).size===1?'client':'portfolio',list[0].clientId);
-    const msg=[added&&`added ${added} polic${added===1?'y':'ies'}`,updated&&`updated ${updated} polic${updated===1?'y':'ies'}`].filter(Boolean).join(', ')+' from PDF';
-    toast(msg[0].toUpperCase()+msg.slice(1));
+    const msg=[added&&`added ${added} polic${added===1?'y':'ies'}`,updated&&`updated ${updated} polic${updated===1?'y':'ies'}`].filter(Boolean).join(', ')+` from ${files.length===1?'PDF':files.length+' PDFs'}`;
+    toast(msg[0].toUpperCase()+msg.slice(1)+skipNote);
   }else{
     setData(list);sampleLoaded=false;
-    if(allPdf&&new Set(list.map(p=>p.clientId)).size===1)go('client',list[0].clientId);
-    toast(`Loaded ${list.length} polic${list.length===1?'y':'ies'} from ${files.length===1?files[0].name:files.length+' files'}`);
+    const nc=new Set(list.map(p=>p.clientId)).size;
+    if(allPdf&&nc===1)go('client',list[0].clientId);
+    toast(`Loaded ${list.length} polic${list.length===1?'y':'ies'} for ${nc} client${nc===1?'':'s'} from ${files.length===1?files[0].name:files.length+' files'}${skipNote}`);
   }
-});
+}
 let sampleLoaded=false;
 function setData(list){policies=list;changes=[];notes={};changedCells.clear();dirty=false;go('portfolio')}
 
@@ -581,10 +598,11 @@ function renderEmpty(){
     <h1>Help every client understand their coverage in one page</h1>
     <div class="muted">Load your ePartner policy export, review each client's protection gaps, update details live, then print a report they can keep.</div>
     <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <label class="btn primary">📂 Load Excel / PDF<input type="file" accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" multiple hidden onchange="$('#file').files=this.files;$('#file').dispatchEvent(new Event('change'))"></label>
+      <label class="btn primary">📂 Load Excel / PDF<input type="file" accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" multiple hidden onchange="loadFiles([...this.files]);this.value=''"></label>
       <button class="btn" onclick="loadSample()">Try sample data</button>
       <button class="btn" onclick="downloadTemplate()">⬇ Download Excel template</button>
     </div>
+    <div class="drop-hint">📄📄📄 <b>Several PDFs at once:</b> drag them onto this window, or in the file picker hold <b>Ctrl</b> and click each file (PC), or tap <b>Select</b> and tick each file (iPhone / Android).</div>
     <div class="steps">
       <div class="card"><b>1 · Export</b>Export the client's policy list from ePartner to Excel, then paste it into the template (or keep your own headers; common names are recognised).</div>
       <div class="card"><b>2 · Review</b>Open a client to see coverage vs target for Life, CI, Medical, Education and Retirement. Edit nominee, premium and purpose with the client.</div>
