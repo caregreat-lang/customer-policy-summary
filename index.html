@@ -183,7 +183,7 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
     <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#fff" opacity=".95"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#1f4e8c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <div>Customer's Policy Summary<small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
   </div>
-  <label class="btn primary">📂 Load Excel / CSV<input type="file" id="file" accept=".xlsx,.xls,.csv" hidden></label>
+  <label class="btn primary">📂 Load Excel / CSV<input type="file" id="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden></label>
   <button class="btn" onclick="loadSample()">Try sample data</button>
   <button class="btn" onclick="downloadTemplate()">⬇ Excel template</button>
   <button class="btn" onclick="exportUpdated()">💾 Export updated Excel</button>
@@ -322,15 +322,21 @@ function parseCSV(text){
   const [h,...body]=rows.filter(r=>r.some(c=>c.trim()));
   return body.map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]??''])));
 }
+// Read the file the moment it is picked: iPhone Safari loses access to files from WhatsApp, email,
+// OneDrive or iCloud if reading is delayed (shows "The object can not be found here").
+function readFileNow(f){return new Promise((ok,fail)=>{const r=new FileReader();r.onload=()=>ok(r.result);r.onerror=()=>fail(r.error||new Error('read failed'));r.readAsArrayBuffer(f)})}
 $('#file').addEventListener('change',async e=>{
   const f=e.target.files[0];if(!f)return;
+  const reading=readFileNow(f);reading.catch(()=>{});
   if(dirty&&!confirm('You have unsaved review changes. Load a new file anyway?')){e.target.value='';return}
   try{
-    let rows;
-    if(/\.csv$/i.test(f.name)){rows=parseCSV(await f.text())}
+    let rows,buf;
+    try{buf=await reading}
+    catch(err){alert('Your phone did not let the app open "'+f.name+'".\n\nOn iPhone: in WhatsApp, email or OneDrive, tap Share → Save to Files → On My iPhone. Then tap Load Excel / CSV, choose Browse → On My iPhone, and pick the file there.\n\n('+err.message+')');e.target.value='';return}
+    if(/\.csv$/i.test(f.name)){rows=parseCSV(new TextDecoder().decode(buf))}
     else{
       if(!window.XLSX){alert('Excel reader could not load. Make sure xlsx.full.min.js is in the app folder, or save the sheet as CSV and load that instead.');return}
-      const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true});
+      const wb=XLSX.read(buf,{cellDates:true});
       const sheet=wb.Sheets[wb.SheetNames.find(n=>/polic/i.test(n))||wb.SheetNames[0]];
       rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
     }
@@ -395,7 +401,7 @@ function renderEmpty(){
     <h1>Help every client understand their coverage in one page</h1>
     <div class="muted">Load your ePartner policy export, review each client's protection gaps, update details live, then print a report they can keep.</div>
     <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
-      <label class="btn primary">📂 Load Excel / CSV<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="$('#file').files=this.files;$('#file').dispatchEvent(new Event('change'))"></label>
+      <label class="btn primary">📂 Load Excel / CSV<input type="file" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden onchange="$('#file').files=this.files;$('#file').dispatchEvent(new Event('change'))"></label>
       <button class="btn" onclick="loadSample()">Try sample data</button>
       <button class="btn" onclick="downloadTemplate()">⬇ Download Excel template</button>
     </div>
