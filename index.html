@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer's Policy Summary</title>
+<meta name="theme-color" content="#1f4e8c">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Policy Summary">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<script src="xlsx.full.min.js"></script>
+<script>window.XLSX||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>')</script>
+<style>
+:root{
+  --bg:#f4f6fa; --card:#fff; --ink:#1b2333; --muted:#677189; --line:#e3e7ef;
+  --brand:#1f4e8c; --brand2:#2f6fbf; --soft:#eaf1fb;
+  --good:#1e8e5a; --goodbg:#e3f5ec; --partial:#c98a0b; --partialbg:#fdf3dc;
+  --gap:#c8372d; --gapbg:#fbe5e3; --na:#9aa3b5; --nabg:#eef0f4;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 "Segoe UI","Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+.topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;margin-right:auto;cursor:pointer}
+.brand small{display:block;font-weight:400;font-size:11.5px;opacity:.8}
+.btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--brand2)}
+.btn.primary{background:var(--brand2);border-color:var(--brand2);color:#fff}
+.btn.primary:hover{background:var(--brand)}
+.topbar .btn{background:rgba(255,255,255,.12);border-color:rgba(255,255,255,.3);color:#fff}
+.topbar .btn:hover{background:rgba(255,255,255,.22)}
+.topbar .btn.primary{background:#fff;color:var(--brand);border-color:#fff}
+main{max-width:1280px;margin:0 auto;padding:20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-bottom:16px}
+.card h2{margin:0 0 12px;font-size:15px}
+.card h2 .sub{font-weight:400;color:var(--muted);font-size:12.5px;margin-left:6px}
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1.4fr 1fr}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi .v{font-size:24px;font-weight:700;margin-top:2px}
+.kpi .l{color:var(--muted);font-size:12.5px}
+.kpi.warn .v{color:var(--gap)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-size:12px;color:var(--muted);font-weight:600;background:#fafbfd;white-space:nowrap}
+tr.click{cursor:pointer}
+tr.click:hover td{background:var(--soft)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.dot{display:inline-block;width:12px;height:12px;border-radius:50%;margin-right:3px;vertical-align:middle}
+.s-good{background:var(--good)} .s-partial{background:var(--partial)} .s-gap{background:var(--gap)} .s-na{background:var(--na)}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600}
+.p-good{background:var(--goodbg);color:var(--good)} .p-partial{background:var(--partialbg);color:var(--partial)}
+.p-gap{background:var(--gapbg);color:var(--gap)} .p-na{background:var(--nabg);color:var(--muted)}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.toolbar input[type=search]{padding:7px 11px;border:1px solid var(--line);border-radius:8px;min-width:240px}
+.muted{color:var(--muted)}
+.empty{text-align:center;padding:60px 20px}
+.empty h1{font-size:24px;margin:10px 0 6px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:28px auto 0;max-width:900px;text-align:left}
+.steps .card{margin:0}
+.steps b{display:block;margin-bottom:4px;color:var(--brand)}
+/* coverage bars */
+.cov{margin-bottom:14px}
+.cov .top{display:flex;justify-content:space-between;gap:10px;margin-bottom:4px}
+.cov .name{font-weight:600}
+.track{position:relative;height:12px;background:#edf0f5;border-radius:6px;overflow:hidden}
+.fill{height:100%;border-radius:6px}
+.fill.good{background:var(--good)} .fill.partial{background:var(--partial)} .fill.gap{background:var(--gap)} .fill.na{background:var(--na)}
+.cov .meta{font-size:12px;color:var(--muted);margin-top:3px}
+/* stacked */
+.stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#edf0f5}
+.stack div{height:100%}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin-top:6px;flex-wrap:wrap}
+/* donut */
+.donutwrap{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.donut{width:130px;height:130px;border-radius:50%;position:relative;flex:none}
+.donut::after{content:"";position:absolute;inset:26px;background:#fff;border-radius:50%}
+.donut span{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;font-size:11px;color:var(--muted);text-align:center}
+.donut span b{font-size:14px;color:var(--ink)}
+.lg-row{display:flex;align-items:center;gap:6px;font-size:12.5px;margin:3px 0}
+.lg-sw{width:10px;height:10px;border-radius:2px;flex:none}
+/* client header */
+.chead{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.avatar{width:52px;height:52px;border-radius:50%;background:var(--soft);color:var(--brand);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:19px}
+.chead h1{margin:0;font-size:20px}
+.facts{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:13px;margin-top:2px}
+.facts b{color:var(--ink);font-weight:600}
+.chead .actions{margin-left:auto;display:flex;gap:8px;flex-wrap:wrap}
+/* editor */
+.edit-wrap{overflow-x:auto}
+.edit td{padding:4px 4px}
+.edit input,.edit select{width:100%;min-width:80px;padding:5px 6px;border:1px solid transparent;border-radius:6px;background:transparent}
+.edit input:hover,.edit select:hover{border-color:var(--line)}
+.edit input:focus,.edit select:focus{outline:none;border-color:var(--brand2);background:#fff}
+.edit input.n{text-align:right;min-width:95px}
+.edit input.w{min-width:140px}
+.edit .changed{background:#fff6d6;border-color:#f0d48a}
+.actlist{margin:0;padding-left:18px}
+.actlist li{margin:5px 0}
+textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;resize:vertical}
+.log td{font-size:12.5px}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(15,25,45,.45);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+.modal.open{display:flex}
+.modal .box{background:#fff;border-radius:14px;max-width:560px;width:100%;padding:20px 22px;max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 4px}
+.form{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;margin:14px 0}
+.form label{font-size:12.5px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.form input{padding:7px 9px;border:1px solid var(--line);border-radius:8px;color:var(--ink)}
+.form .full{grid-column:1/-1}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#1b2333;color:#fff;padding:9px 16px;border-radius:8px;opacity:0;transition:opacity .25s;z-index:60;pointer-events:none}
+.toast.show{opacity:1}
+/* ---------- client report ---------- */
+.rep-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff}
+.seg button{border:0;background:none;padding:7px 14px;cursor:pointer}
+.seg button.on{background:var(--brand2);color:#fff}
+.report{background:#fff;max-width:820px;margin:0 auto;padding:36px 42px;border-radius:6px;box-shadow:0 4px 24px rgba(20,40,80,.1)}
+.r-head{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:3px solid var(--brand);padding-bottom:14px;margin-bottom:18px;gap:16px}
+.r-head h1{margin:0;color:var(--brand);font-size:22px}
+.r-head .who{font-size:13px;color:var(--muted);margin-top:4px}
+.r-head .who b{color:var(--ink);font-size:16px}
+.r-head .meta{text-align:right;font-size:12.5px;color:var(--muted)}
+.r-sec{margin:20px 0}
+.r-sec h2{font-size:14.5px;color:var(--brand);margin:0 0 10px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+.r-areas{display:grid;grid-template-columns:1fr 1fr;gap:10px 22px}
+.r-area{border:1px solid var(--line);border-radius:10px;padding:10px 12px;break-inside:avoid}
+.r-area .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px}
+.r-area .name{font-weight:700}
+.r-area .meta{font-size:12px;color:var(--muted);margin-top:5px}
+.r-score{display:flex;gap:14px;align-items:center;background:var(--soft);border-radius:10px;padding:12px 16px}
+.r-score .big{font-size:30px;font-weight:800;color:var(--brand)}
+.r-table th{background:var(--soft);color:var(--brand)}
+.r-table td,.r-table th{font-size:12px;padding:6px 7px}
+.r-prem{display:flex;gap:12px}
+.r-prem div{flex:1;border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.r-prem b{display:block;font-size:17px;color:var(--ink)}
+.r-prem span{font-size:12px;color:var(--muted)}
+.r-enh{list-style:none;padding-left:0}
+.r-enh li{margin:6px 0}
+.nw{white-space:nowrap}
+.r-sign{display:flex;gap:40px;margin-top:34px}
+.r-sign div{flex:1;border-top:1px solid var(--ink);padding-top:5px;font-size:12px;color:var(--muted)}
+.r-disc{font-size:10.5px;color:var(--muted);margin-top:22px;border-top:1px solid var(--line);padding-top:8px}
+.tag-new{font-size:10.5px;background:var(--partialbg);color:var(--partial);padding:1px 6px;border-radius:4px;font-weight:600}
+@media (max-width:900px){.g2{grid-template-columns:1fr}.r-areas{grid-template-columns:1fr}.report{padding:22px 18px}.form{grid-template-columns:1fr}}
+.grid>*{min-width:0}
+/* phone */
+@media screen and (max-width:600px){
+  .topbar{gap:6px;padding:8px 12px;padding-top:max(8px,env(safe-area-inset-top))}
+  .brand{width:100%;font-size:15px}.brand small{display:none}
+  .topbar .btn{padding:5px 9px;font-size:12.5px}
+  main{padding:12px}
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:10px 12px}.kpi .v{font-size:19px}
+  .card{padding:12px}
+  .toolbar input[type=search]{min-width:0;width:100%}
+  .r-sec{overflow-x:auto}
+  .r-head{flex-wrap:wrap;gap:8px}
+  .r-prem{flex-wrap:wrap}
+}
+@media print{
+  @page{size:A4;margin:12mm}
+  body{background:#fff}
+  .topbar,.no-print,.toast,.modal{display:none!important}
+  main{padding:0;max-width:none}
+  .report{box-shadow:none;padding:0;max-width:none}
+  .r-areas{grid-template-columns:1fr 1fr}
+  .r-sec,.r-table tr{break-inside:avoid}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand" onclick="go('portfolio')">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#fff" opacity=".95"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#1f4e8c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div>Customer's Policy Summary<small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
+  </div>
+  <label class="btn primary">📂 Load Excel / CSV<input type="file" id="file" accept=".xlsx,.xls,.csv" hidden></label>
+  <button class="btn" onclick="loadSample()">Try sample data</button>
+  <button class="btn" onclick="downloadTemplate()">⬇ Excel template</button>
+  <button class="btn" onclick="exportUpdated()">💾 Export updated Excel</button>
+  <button class="btn" onclick="openSettings()">⚙ Settings</button>
+</div>
+
+<main id="app"></main>
+
+<div class="modal" id="settings">
+  <div class="box">
+    <h3>Settings</h3>
+    <div class="muted">Advisor details appear on the client report. Coverage targets drive the gap analysis.</div>
+    <div class="form">
+      <label class="full">Advisor name<input id="st-advisor"></label>
+      <label>Branch / company<input id="st-branch"></label>
+      <label>Contact no.<input id="st-phone"></label>
+      <label>Currency<input id="st-currency"></label>
+      <label>Life cover target (× annual income)<input id="st-lifeMult" type="number" step="0.5"></label>
+      <label>Critical illness target (× annual income)<input id="st-ciMult" type="number" step="0.5"></label>
+      <label>Medical annual limit target (amount)<input id="st-medMin" type="number" step="10000"></label>
+      <label>Education fund per dependant (amount)<input id="st-eduPerChild" type="number" step="10000"></label>
+      <label>Retirement fund target (× annual income)<input id="st-retireMult" type="number" step="0.5"></label>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn" onclick="closeSettings()">Cancel</button>
+      <button class="btn primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ================= configuration ================= */
+const AREAS=['life','ci','medical','savings','retirement'];
+const AREA_EN={life:'Life / Death',ci:'Critical Illness',medical:'Medical / Hospital',savings:'Education / Savings',retirement:'Retirement'};
+const STATUSES=['Active','Proposed','Lapsed','Surrendered','Matured'];
+const FREQS={Monthly:12,Quarterly:4,'Half-yearly':2,Yearly:1,Single:0};
+const PALETTE=['#2f6fbf','#1e8e5a','#c98a0b','#8e44ad','#c8372d','#16a2b8','#6c7a89'];
+
+// [field, template header, accepted header aliases (normalised)]
+const COLS=[
+ ['clientId','Client ID',['clientid','customerid','cif','icno','nric','clientno','customerno']],
+ ['clientName','Client Name',['clientname','customername','name','policyowner','owner','ownername']],
+ ['age','Age',['age']],
+ ['income','Annual Income',['annualincome','income','yearlyincome']],
+ ['dependants','Dependants',['dependants','dependents','children','noofchildren','noofdependants']],
+ ['lastReview','Last Review Date',['lastreviewdate','lastreview','reviewdate']],
+ ['policyNo','Policy No',['policyno','policynumber','policy','contractno','certificateno']],
+ ['plan','Plan Name',['planname','plan','product','productname']],
+ ['type','Policy Type',['policytype','type','category','producttype']],
+ ['life','Life Cover',['lifecover','sumassured','deathbenefit','life','basicsumassured']],
+ ['ci','CI Cover',['cicover','criticalillness','ci','cisumassured','criticalillnesscover']],
+ ['medical','Medical Limit',['medicallimit','medical','hospital','annuallimit','medicalcard']],
+ ['savings','Education/Savings Value',['educationsavingsvalue','savingsvalue','savings','education','maturityvalue']],
+ ['retirement','Retirement Value',['retirementvalue','retirement','retirementfund']],
+ ['premium','Premium',['premium','premiumamount','modalpremium','installmentpremium']],
+ ['frequency','Frequency',['frequency','paymentmode','mode','premiumfrequency','paymentfrequency']],
+ ['nominee','Nominee',['nominee','beneficiary','nomineename','beneficiaryname']],
+ ['nomineeRel','Nominee Relationship',['nomineerelationship','relationship','nomineerelation','beneficiaryrelationship']],
+ ['purpose','Purpose',['purpose','policypurpose','objective']],
+ ['start','Start Date',['startdate','commencementdate','inceptiondate','start','effectivedate']],
+ ['maturity','Maturity Date',['maturitydate','expirydate','maturity']],
+ ['status','Status',['status','policystatus']],
+];
+const NUM=new Set(['age','income','dependants','life','ci','medical','savings','retirement','premium']);
+const FIELD_LABEL=Object.fromEntries(COLS.map(c=>[c[0],c[1]]));
+
+/* ================= state ================= */
+const DEFAULTS={advisor:'',branch:'',phone:'',currency:'RM',lifeMult:10,ciMult:5,medMin:1000000,eduPerChild:150000,retireMult:10};
+let S=Object.assign({},DEFAULTS);
+try{Object.assign(S,JSON.parse(localStorage.getItem('cps-settings')||'{}'))}catch(e){}
+let policies=[];        // flat list of policy rows
+let changes=[];         // {clientId, policyNo, field, from, to, at}
+let notes={};           // clientId -> advisor notes
+let changedCells=new Set();
+let view={name:'portfolio',clientId:null,lang:'en',q:'',dueOnly:false};
+let dirty=false;
+
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s);
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const money=n=>S.currency+' '+Math.round(n||0).toLocaleString('en-MY');
+const normKey=s=>String(s).toLowerCase().replace(/[^a-z0-9]/g,'');
+const pad=n=>String(n).padStart(2,'0');
+const isoDate=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const today=()=>isoDate(new Date());
+function fmtDate(iso){if(!iso)return'—';const[y,m,d]=iso.split('-');return `${d}/${m}/${y}`}
+function addYear(iso){if(!iso)return'';const d=new Date(iso+'T00:00:00');d.setFullYear(d.getFullYear()+1);return isoDate(d)}
+function daysUntil(iso){if(!iso)return null;return Math.round((new Date(iso+'T00:00:00')-new Date(today()+'T00:00:00'))/864e5)}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),2400)}
+function toNum(v){if(v===null||v===undefined||v==='')return 0;if(typeof v==='number')return v;const n=parseFloat(String(v).replace(/[^0-9.\-]/g,''));return isNaN(n)?0:n}
+function toDate(v){
+  if(v===null||v===undefined||v==='')return'';
+  if(v instanceof Date&&!isNaN(v))return isoDate(v);
+  if(typeof v==='number'){const d=new Date(Math.round((v-25569)*864e5));return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`}
+  const s=String(v).trim();
+  let m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4})$/);           // dd/mm/yyyy (Malaysian format)
+  if(m)return `${m[3]}-${pad(m[2])}-${pad(m[1])}`;
+  m=s.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if(m)return `${m[1]}-${pad(m[2])}-${pad(m[3])}`;
+  const d=new Date(s);return isNaN(d)?'':isoDate(d);
+}
+function normFreq(v){const s=normKey(v);if(!s)return'Yearly';if(s.startsWith('month'))return'Monthly';if(s.startsWith('quart'))return'Quarterly';if(s.startsWith('half')||s.startsWith('semi'))return'Half-yearly';if(s.startsWith('single')||s.startsWith('lump')||s==='sp')return'Single';return'Yearly'}
+function normStatus(v){const s=normKey(v);if(!s||s.startsWith('inforce')||s.startsWith('active'))return'Active';if(s.startsWith('laps'))return'Lapsed';if(s.startsWith('surr'))return'Surrendered';if(s.startsWith('matur'))return'Matured';if(s.startsWith('prop')||s.startsWith('pend'))return'Proposed';return'Active'}
+const isActive=p=>p.status==='Active';
+const annualPrem=p=>(p.premium||0)*(FREQS[p.frequency]??1);
+
+/* ================= import ================= */
+function rowsToPolicies(rows){
+  if(!rows.length)return[];
+  const headerMap={};
+  Object.keys(rows[0]).forEach(h=>{
+    const k=normKey(h);
+    const col=COLS.find(c=>normKey(c[1])===k||c[2].includes(k));
+    if(col&&!Object.values(headerMap).includes(col[0]))headerMap[h]=col[0];
+  });
+  return rows.map(r=>{
+    const p={};COLS.forEach(c=>p[c[0]]=NUM.has(c[0])?0:'');
+    for(const h in r){const f=headerMap[h];if(!f)continue;p[f]=NUM.has(f)?toNum(r[h]):String(r[h]??'').trim()}
+    p.lastReview=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='lastReview')]);
+    p.start=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='start')]);
+    p.maturity=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='maturity')]);
+    p.frequency=normFreq(p.frequency);p.status=normStatus(p.status);
+    if(!p.clientId)p.clientId=p.clientName;
+    return p;
+  }).filter(p=>p.clientId||p.policyNo);
+}
+function parseCSV(text){
+  const rows=[];let row=[],cell='',q=false;
+  for(let i=0;i<text.length;i++){const ch=text[i];
+    if(q){if(ch==='"'&&text[i+1]==='"'){cell+='"';i++}else if(ch==='"')q=false;else cell+=ch}
+    else if(ch==='"')q=true;else if(ch===','){row.push(cell);cell=''}
+    else if(ch==='\n'||ch==='\r'){if(ch==='\r'&&text[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}
+    else cell+=ch}
+  if(cell||row.length){row.push(cell);rows.push(row)}
+  const [h,...body]=rows.filter(r=>r.some(c=>c.trim()));
+  return body.map(r=>Object.fromEntries(h.map((k,i)=>[k,r[i]??''])));
+}
+$('#file').addEventListener('change',async e=>{
+  const f=e.target.files[0];if(!f)return;
+  if(dirty&&!confirm('You have unsaved review changes. Load a new file anyway?')){e.target.value='';return}
+  try{
+    let rows;
+    if(/\.csv$/i.test(f.name)){rows=parseCSV(await f.text())}
+    else{
+      if(!window.XLSX){alert('Excel reader could not load. Make sure xlsx.full.min.js is in the app folder, or save the sheet as CSV and load that instead.');return}
+      const wb=XLSX.read(await f.arrayBuffer(),{cellDates:true});
+      const sheet=wb.Sheets[wb.SheetNames.find(n=>/polic/i.test(n))||wb.SheetNames[0]];
+      rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
+    }
+    const list=rowsToPolicies(rows);
+    if(!list.length){alert('No policy rows found. Check the column headers match the template.');return}
+    setData(list);toast(`Loaded ${list.length} policies from ${f.name}`);
+  }catch(err){alert('Could not read the file: '+err.message)}
+  e.target.value='';
+});
+function setData(list){policies=list;changes=[];notes={};changedCells.clear();dirty=false;go('portfolio')}
+
+/* ================= analysis ================= */
+function clients(){
+  const map=new Map();
+  policies.forEach((p,i)=>{
+    const id=p.clientId||'(no id)';
+    if(!map.has(id))map.set(id,{id,name:'',age:0,income:0,dependants:0,lastReview:'',policies:[]});
+    const c=map.get(id);
+    c.policies.push(Object.assign(p,{_i:i}));
+    if(!c.name&&p.clientName)c.name=p.clientName;
+    if(!c.age&&p.age)c.age=p.age;
+    if(!c.income&&p.income)c.income=p.income;
+    if(!c.dependants&&p.dependants)c.dependants=p.dependants;
+    if(p.lastReview&&p.lastReview>c.lastReview)c.lastReview=p.lastReview;
+  });
+  return [...map.values()].map(c=>Object.assign(c,analyse(c)));
+}
+function analyse(c){
+  const act=c.policies.filter(isActive);
+  const inc=c.income||0;
+  const target={life:inc*S.lifeMult,ci:inc*S.ciMult,medical:+S.medMin,savings:S.eduPerChild*(c.dependants||0),retirement:inc*S.retireMult};
+  const areas=AREAS.map(k=>{
+    const have=act.reduce((s,p)=>s+(p[k]||0),0),t=target[k];
+    const pct=t>0?have/t:(have>0?1:null);
+    const status=pct===null?'na':pct>=1?'good':pct>=.5?'partial':'gap';
+    return{key:k,have,target:t,pct,status,shortfall:Math.max(0,t-have)};
+  });
+  const annual=act.reduce((s,p)=>s+annualPrem(p),0);
+  const actions=[];
+  areas.forEach(a=>{if(a.status==='gap'||a.status==='partial')actions.push({k:'act_'+a.key,v:a.shortfall,sev:a.status})});
+  act.forEach(p=>{if(!p.nominee)actions.push({k:'act_nominee',v:p.policyNo,sev:'gap'})});
+  c.policies.filter(p=>p.status==='Lapsed').forEach(p=>actions.push({k:'act_lapsed',v:p.policyNo,sev:'partial'}));
+  if(inc&&annual/inc>.15)actions.push({k:'act_afford',sev:'partial'});
+  const scored=areas.filter(a=>a.pct!==null);
+  const score=scored.length?Math.round(scored.reduce((s,a)=>s+Math.min(a.pct,1),0)/scored.length*100):0;
+  const nextReview=c.lastReview?addYear(c.lastReview):'';
+  return{areas,annual,actions,score,nextReview,activeCount:act.length};
+}
+
+/* ================= navigation ================= */
+function go(name,clientId){view.name=name;if(clientId!==undefined)view.clientId=clientId;render();window.scrollTo(0,0)}
+function render(){
+  if(!policies.length)return renderEmpty();
+  if(view.name==='client')return renderClient();
+  if(view.name==='report')return renderReport();
+  renderPortfolio();
+}
+
+function renderEmpty(){
+  $('#app').innerHTML=`<div class="empty">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#2f6fbf"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <h1>Help every client understand their coverage in one page</h1>
+    <div class="muted">Load your ePartner policy export, review each client's protection gaps, update details live, then print a report they can keep.</div>
+    <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+      <label class="btn primary">📂 Load Excel / CSV<input type="file" accept=".xlsx,.xls,.csv" hidden onchange="$('#file').files=this.files;$('#file').dispatchEvent(new Event('change'))"></label>
+      <button class="btn" onclick="loadSample()">Try sample data</button>
+      <button class="btn" onclick="downloadTemplate()">⬇ Download Excel template</button>
+    </div>
+    <div class="steps">
+      <div class="card"><b>1 · Export</b>Export the client's policy list from ePartner to Excel, then paste it into the template (or keep your own headers; common names are recognised).</div>
+      <div class="card"><b>2 · Review</b>Open a client to see coverage vs target for Life, CI, Medical, Education and Retirement. Edit nominee, premium and purpose with the client.</div>
+      <div class="card"><b>3 · Hand over</b>Print or save the client report as PDF in English, 中文 or Bahasa Malaysia, then export the updated Excel with a change log.</div>
+    </div>
+    <p class="muted" style="margin-top:26px;font-size:12px">🔒 Everything runs in this browser. No customer data is uploaded anywhere.</p>
+  </div>`;
+}
+
+/* ---------- portfolio dashboard ---------- */
+function renderPortfolio(){
+  const cs=clients();
+  const totalPrem=cs.reduce((s,c)=>s+c.annual,0);
+  const due=cs.filter(c=>{const d=daysUntil(c.nextReview);return d===null||d<=30});
+  const withGaps=cs.filter(c=>c.areas.some(a=>a.status==='gap'));
+  const noNominee=policies.filter(p=>isActive(p)&&!p.nominee).length;
+  const q=view.q.toLowerCase();
+  const list=cs.filter(c=>(!q||(c.name+' '+c.id).toLowerCase().includes(q))&&(!view.dueOnly||due.includes(c)))
+               .sort((a,b)=>(a.nextReview||'0').localeCompare(b.nextReview||'0'));
+  const dist=AREAS.map(k=>{const n={good:0,partial:0,gap:0,na:0};cs.forEach(c=>n[c.areas.find(a=>a.key===k).status]++);return{k,n}});
+  $('#app').innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><div class="l">Clients</div><div class="v">${cs.length}</div></div>
+    <div class="kpi"><div class="l">Active policies</div><div class="v">${policies.filter(isActive).length}</div></div>
+    <div class="kpi"><div class="l">Total annual premium</div><div class="v">${money(totalPrem)}</div></div>
+    <div class="kpi ${due.length?'warn':''}"><div class="l">Reviews due ≤ 30 days / overdue</div><div class="v">${due.length}</div></div>
+    <div class="kpi ${withGaps.length?'warn':''}"><div class="l">Clients with a coverage gap</div><div class="v">${withGaps.length}</div></div>
+    <div class="kpi ${noNominee?'warn':''}"><div class="l">Active policies without nominee</div><div class="v">${noNominee}</div></div>
+  </div>
+  <div class="grid g2">
+    <div class="card">
+      <h2>Clients <span class="sub">click a client to open the review</span></h2>
+      <div class="toolbar">
+        <input type="search" placeholder="Search name or client ID…" value="${esc(view.q)}" oninput="view.q=this.value;renderPortfolio();const i=document.querySelector('.toolbar input');i.focus();i.setSelectionRange(i.value.length,i.value.length)">
+        <label><input type="checkbox" ${view.dueOnly?'checked':''} onchange="view.dueOnly=this.checked;renderPortfolio()"> Reviews due only</label>
+      </div>
+      <div style="overflow-x:auto"><table>
+        <thead><tr><th>Client</th><th class="num">Policies</th><th class="num">Annual premium</th><th title="Life · CI · Medical · Education · Retirement">Coverage L·C·M·E·R</th><th class="num">Score</th><th>Next review</th></tr></thead>
+        <tbody>${list.map(c=>{const d=daysUntil(c.nextReview);
+          const dueTxt=c.nextReview?`${fmtDate(c.nextReview)} ${d<0?'<span class="pill p-gap">overdue</span>':d<=30?'<span class="pill p-partial">due soon</span>':''}`:'<span class="pill p-gap">never reviewed</span>';
+          return `<tr class="click" onclick="go('client','${esc(c.id)}')">
+          <td><b>${esc(c.name||c.id)}</b><div class="muted" style="font-size:12px">${esc(c.id)}${c.age?' · Age '+c.age:''}</div></td>
+          <td class="num">${c.activeCount}</td><td class="num">${money(c.annual)}</td>
+          <td>${c.areas.map(a=>`<span class="dot s-${a.status}" title="${AREA_EN[a.key]}: ${a.status}"></span>`).join('')}</td>
+          <td class="num"><b>${c.score}%</b></td><td>${dueTxt}</td></tr>`}).join('')||'<tr><td colspan="6" class="muted">No clients match.</td></tr>'}
+        </tbody></table></div>
+    </div>
+    <div>
+      <div class="card">
+        <h2>Coverage health across all clients</h2>
+        ${dist.map(({k,n})=>{const t=cs.length||1;return `<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px"><b>${AREA_EN[k]}</b><span class="muted">${n.good}/${cs.length} well covered</span></div>
+          <div class="stack">${['good','partial','gap','na'].map(s=>`<div class="s-${s}" style="width:${n[s]/t*100}%" title="${s}: ${n[s]}"></div>`).join('')}</div></div>`}).join('')}
+        <div class="legend"><span><span class="dot s-good"></span>Well covered</span><span><span class="dot s-partial"></span>Partial (50–99%)</span><span><span class="dot s-gap"></span>Gap (&lt;50%)</span><span><span class="dot s-na"></span>N/A</span></div>
+      </div>
+      <div class="card">
+        <h2>Top review priorities</h2>
+        <ol class="actlist">${cs.slice().sort((a,b)=>a.score-b.score).slice(0,5).map(c=>`<li><a href="#" onclick="go('client','${esc(c.id)}');return false">${esc(c.name||c.id)}</a> <span class="muted">· score ${c.score}% · ${c.actions.length} action${c.actions.length===1?'':'s'}</span></li>`).join('')}</ol>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------- client review ---------- */
+function getClient(){return clients().find(c=>c.id===view.clientId)}
+function renderClient(){
+  const c=getClient();if(!c)return go('portfolio');
+  const initials=(c.name||c.id).split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  const d=daysUntil(c.nextReview);
+  $('#app').innerHTML=`
+  <div class="toolbar no-print"><button class="btn" onclick="go('portfolio')">← All clients</button></div>
+  <div class="card chead">
+    <div class="avatar">${esc(initials)}</div>
+    <div><h1>${esc(c.name||c.id)}</h1>
+      <div class="facts"><span>ID <b>${esc(c.id)}</b></span><span>Age <b>${c.age||'—'}</b></span><span>Annual income <b>${c.income?money(c.income):'—'}</b></span><span>Dependants <b>${c.dependants||0}</b></span>
+      <span>Last review <b>${fmtDate(c.lastReview)}</b></span><span>Next review <b>${fmtDate(c.nextReview)}</b> ${d!==null&&d<0?'<span class="pill p-gap">overdue</span>':''}</span></div></div>
+    <div class="actions">
+      <button class="btn" onclick="markReviewed()">✔ Mark reviewed today</button>
+      <button class="btn primary" onclick="go('report')">📄 Client report</button>
+    </div>
+  </div>
+  <div id="cv-analysis"></div>
+  <div class="card">
+    <h2>Update policies with the client <span class="sub">edit any cell; changes are highlighted and logged</span></h2>
+    <div class="edit-wrap"><table class="edit">
+      <thead><tr><th>Policy no.</th><th>Plan</th><th>Type</th><th>Status</th><th class="num">Premium</th><th>Frequency</th>
+      <th class="num">Life cover</th><th class="num">CI cover</th><th class="num">Medical limit</th><th class="num">Edu/Savings</th><th class="num">Retirement</th>
+      <th>Nominee</th><th>Relationship</th><th>Purpose</th></tr></thead>
+      <tbody>${c.policies.map(p=>editRow(p)).join('')}</tbody>
+    </table></div>
+    <div style="margin-top:10px"><button class="btn" onclick="addPolicy()">＋ Add proposed policy</button>
+    <span class="muted" style="font-size:12px;margin-left:8px">Proposed policies show on the report as recommendations but don't count toward current coverage.</span></div>
+  </div>
+  <div class="grid g2">
+    <div class="card"><h2>Advisor notes <span class="sub">shown on the client report</span></h2>
+      <textarea id="notes" placeholder="e.g. Client plans to have a second child next year; revisit education fund. Agreed to change nominee to spouse.">${esc(notes[c.id]||'')}</textarea></div>
+    <div class="card"><h2>Change log <span class="sub">this session</span></h2><div id="cv-log"></div></div>
+  </div>`;
+  renderAnalysis();renderLog();
+}
+function cellIn(p,f,cls=''){
+  const ch=changedCells.has(p._i+'|'+f)?' changed':'';
+  const v=NUM.has(f)?(p[f]||''):p[f];
+  return `<td><input class="${cls}${ch}" data-i="${p._i}" data-f="${f}" value="${esc(v)}" ${NUM.has(f)?'inputmode="decimal"':''}></td>`;
+}
+function cellSel(p,f,opts){
+  const ch=changedCells.has(p._i+'|'+f)?' changed':'';
+  return `<td><select class="${ch}" data-i="${p._i}" data-f="${f}">${opts.map(o=>`<option ${o===p[f]?'selected':''}>${o}</option>`).join('')}</select></td>`;
+}
+function editRow(p){
+  return `<tr>${cellIn(p,'policyNo')}${cellIn(p,'plan','w')}${cellIn(p,'type')}${cellSel(p,'status',STATUSES)}${cellIn(p,'premium','n')}${cellSel(p,'frequency',Object.keys(FREQS))}
+  ${cellIn(p,'life','n')}${cellIn(p,'ci','n')}${cellIn(p,'medical','n')}${cellIn(p,'savings','n')}${cellIn(p,'retirement','n')}
+  ${cellIn(p,'nominee','w')}${cellIn(p,'nomineeRel')}${cellIn(p,'purpose','w')}</tr>`;
+}
+function renderAnalysis(){
+  const c=getClient();if(!c)return;
+  const byType={};c.policies.filter(isActive).forEach(p=>{const t=p.type||'Other';byType[t]=(byType[t]||0)+annualPrem(p)});
+  const entries=Object.entries(byType).sort((a,b)=>b[1]-a[1]);
+  let acc=0;const grad=entries.map(([,v],i)=>{const a=acc/c.annual*360;acc+=v;return `${PALETTE[i%PALETTE.length]} ${a}deg ${acc/c.annual*360}deg`}).join(',');
+  $('#cv-analysis').innerHTML=`<div class="grid g2">
+    <div class="card"><h2>Coverage vs recommended <span class="sub">overall protection score <b style="color:var(--brand)">${c.score}%</b></span></h2>
+      ${c.areas.map(a=>`<div class="cov"><div class="top"><span class="name">${AREA_EN[a.key]}</span><span class="pill p-${a.status}">${a.pct===null?'N/A':Math.round(a.pct*100)+'%'}</span></div>
+        <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
+        <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div></div>`).join('')}
+    </div>
+    <div>
+      <div class="card"><h2>Premium breakdown</h2>
+        <div class="donutwrap">
+          <div class="donut" style="background:${c.annual?`conic-gradient(${grad})`:'#edf0f5'}"><span><b>${money(c.annual)}</b>per year</span></div>
+          <div>${entries.map(([t,v],i)=>`<div class="lg-row"><span class="lg-sw" style="background:${PALETTE[i%PALETTE.length]}"></span>${esc(t)} · ${money(v)}</div>`).join('')||'<span class="muted">No active policies</span>'}
+          ${c.income?`<div class="muted" style="font-size:12px;margin-top:6px">${(c.annual/c.income*100).toFixed(1)}% of annual income</div>`:''}</div>
+        </div></div>
+      <div class="card"><h2>Areas to enhance</h2>
+        ${c.actions.length?`<ul class="actlist">${c.actions.map(a=>`<li><span class="dot s-${a.sev}"></span>${esc(actionText(a,'en'))}</li>`).join('')}</ul>`:'<div class="muted">✅ All areas meet the recommended level.</div>'}</div>
+    </div></div>`;
+}
+function renderLog(){
+  const c=getClient();if(!c)return;
+  const list=changes.filter(x=>x.clientId===c.id);
+  $('#cv-log').innerHTML=list.length?`<table class="log"><thead><tr><th>Policy</th><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>${list.map(x=>`<tr><td>${esc(x.policyNo)}</td><td>${esc(FIELD_LABEL[x.field]||x.field)}</td><td class="muted">${esc(fmtVal(x.field,x.from))}</td><td><b>${esc(fmtVal(x.field,x.to))}</b></td></tr>`).join('')}</tbody></table>`:'<div class="muted">No changes yet.</div>';
+}
+function fmtVal(f,v){if(NUM.has(f)&&f!=='age'&&f!=='dependants')return v===''||v===null?'—':money(v);return v===''||v==null?'—':v}
+
+// live editing
+document.addEventListener('change',e=>{
+  const t=e.target;if(t.dataset.i===undefined)return;
+  const p=policies[+t.dataset.i],f=t.dataset.f;
+  const nv=NUM.has(f)?toNum(t.value):t.value.trim();
+  if(nv===p[f])return;
+  changes.push({clientId:p.clientId,policyNo:p.policyNo,field:f,from:p[f],to:nv,at:new Date().toLocaleString('en-GB')});
+  p[f]=nv;changedCells.add(p._i+'|'+f);t.classList.add('changed');dirty=true;
+  if(NUM.has(f))t.value=nv||'';
+  renderAnalysis();renderLog();
+});
+document.addEventListener('input',e=>{if(e.target.id==='notes'){notes[view.clientId]=e.target.value;dirty=true}});
+window.addEventListener('beforeunload',e=>{if(dirty){e.preventDefault();e.returnValue=''}});
+
+function addPolicy(){
+  const c=getClient(),base=c.policies[0];
+  const p={};COLS.forEach(k=>p[k[0]]=NUM.has(k[0])?0:'');
+  Object.assign(p,{clientId:c.id,clientName:c.name,age:c.age,income:c.income,dependants:c.dependants,lastReview:c.lastReview,
+    policyNo:'NEW-'+(changes.length+policies.length+1),plan:'',type:'',status:'Proposed',frequency:'Monthly',start:today()});
+  policies.push(p);
+  changes.push({clientId:c.id,policyNo:p.policyNo,field:'status',from:'',to:'Proposed',at:new Date().toLocaleString('en-GB')});
+  dirty=true;renderClient();toast('Proposed policy added. Fill in plan, premium and cover.');
+}
+function markReviewed(){
+  const c=getClient(),t=today();
+  c.policies.forEach(p=>{if(p.lastReview!==t){p.lastReview=t}});
+  changes.push({clientId:c.id,policyNo:'(all)',field:'lastReview',from:c.lastReview,to:t,at:new Date().toLocaleString('en-GB')});
+  dirty=true;renderClient();toast('Review date set to today. Next review in 12 months.');
+}
+
+/* ---------- client report (EN / 中文 / BM) ---------- */
+const T={
+en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review date',preparedBy:'Prepared by',glance:'Your protection at a glance',score:'Overall protection score',scoreHint:'How close your current coverage is to the recommended level across all areas.',
+ area_life:'Life / Death',area_ci:'Critical Illness',area_medical:'Medical / Hospital',area_savings:'Education / Savings',area_retirement:'Retirement',
+ youHave:'You have',recommended:'Recommended',notRequired:'Not required',st_good:'Well covered',st_partial:'Partially covered',st_gap:'Gap: needs attention',st_na:'Not applicable',
+ policies:'Your policies',plan:'Plan',policyNo:'Policy no.',coverage:'Coverage',premium:'Premium',nominee:'Nominee',purpose:'Purpose',status:'Status',maturity:'Maturity',
+ premSummary:'Premium summary',annualPrem:'Total annual premium',monthlyEq:'Monthly equivalent',ofIncome:'Share of annual income',
+ changes:'Updated in this review',noChanges:'No changes were made in this review.',item:'Item',from:'Before',to:'After',
+ enhance:'Areas to enhance',allGood:'Your coverage meets all recommended levels. Well done!',notes:'Advisor notes',nextReview:'Next review',
+ sigClient:'Client signature / date',sigAdvisor:'Advisor signature / date',none:'Not stated',
+ disclaimer:'This summary is for discussion purposes only and is based on information available on the review date. Recommended levels are general guidelines, not financial advice; please refer to your policy contracts for full terms and conditions.',
+ cv:{life:'Life',ci:'CI',medical:'Medical',savings:'Savings',retirement:'Retirement'},
+ stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured'},
+ freq:{Monthly:'monthly',Quarterly:'quarterly','Half-yearly':'half-yearly',Yearly:'yearly',Single:'single'},
+ field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Medical limit',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date'},
+ act_life:a=>`Increase life protection by about ${a}`,act_ci:a=>`Increase critical illness protection by about ${a}`,act_medical:a=>`Increase medical / hospital coverage by about ${a} in annual limit`,
+ act_savings:a=>`Build the education / savings fund by about ${a}`,act_retirement:a=>`Grow the retirement fund by about ${a}`,act_nominee:p=>`Appoint a nominee for policy ${p}`,
+ act_lapsed:p=>`Consider reinstating lapsed policy ${p}`,act_afford:()=>'Premiums exceed 15% of income. Review affordability together.'},
+zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日期',preparedBy:'理财顾问',glance:'您的保障一览',score:'整体保障评分',scoreHint:'衡量您目前的保障与各项建议水平的接近程度。',
+ area_life:'人寿 / 身故',area_ci:'重大疾病',area_medical:'医疗 / 住院',area_savings:'教育 / 储蓄',area_retirement:'退休',
+ youHave:'现有',recommended:'建议',notRequired:'无需',st_good:'保障充足',st_partial:'部分保障',st_gap:'保障缺口 — 需关注',st_na:'不适用',
+ policies:'您的保单',plan:'计划',policyNo:'保单号码',coverage:'保障',premium:'保费',nominee:'受益人',purpose:'投保目的',status:'状态',maturity:'满期日',
+ premSummary:'保费摘要',annualPrem:'每年总保费',monthlyEq:'每月相当于',ofIncome:'占年收入比例',
+ changes:'本次检视的更新',noChanges:'本次检视没有任何更改。',item:'项目',from:'更改前',to:'更改后',
+ enhance:'可加强的方面',allGood:'您的保障已达到所有建议水平，请继续保持！',notes:'顾问备注',nextReview:'下次检视',
+ sigClient:'客户签名 / 日期',sigAdvisor:'顾问签名 / 日期',none:'未填写',
+ disclaimer:'本摘要仅供讨论用途，依据检视当日的资料编制。建议保障水平仅为一般参考，并非理财建议；完整条款与细则请以保单合约为准。',
+ cv:{life:'寿险',ci:'重疾',medical:'医疗',savings:'储蓄',retirement:'退休'},
+ stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期'},
+ freq:{Monthly:'每月',Quarterly:'每季','Half-yearly':'每半年',Yearly:'每年',Single:'一次性'},
+ field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'医疗限额',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期'},
+ act_life:a=>`将人寿保障提高约 ${a}`,act_ci:a=>`将重大疾病保障提高约 ${a}`,act_medical:a=>`将医疗/住院年度限额提高约 ${a}`,
+ act_savings:a=>`将教育/储蓄基金增加约 ${a}`,act_retirement:a=>`将退休基金增加约 ${a}`,act_nominee:p=>`为保单 ${p} 指定受益人`,
+ act_lapsed:p=>`考虑恢复已失效的保单 ${p}`,act_afford:()=>'保费超过收入的15%，建议一起检视负担能力。'},
+ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'Tarikh semakan',preparedBy:'Disediakan oleh',glance:'Perlindungan anda sepintas lalu',score:'Skor perlindungan keseluruhan',scoreHint:'Sejauh mana perlindungan semasa anda menghampiri tahap yang disyorkan bagi semua bidang.',
+ area_life:'Hayat / Kematian',area_ci:'Penyakit Kritikal',area_medical:'Perubatan / Hospital',area_savings:'Pendidikan / Simpanan',area_retirement:'Persaraan',
+ youHave:'Anda ada',recommended:'Disyorkan',notRequired:'Tidak diperlukan',st_good:'Perlindungan mencukupi',st_partial:'Perlindungan separa',st_gap:'Jurang: perlu perhatian',st_na:'Tidak berkenaan',
+ policies:'Polisi anda',plan:'Pelan',policyNo:'No. polisi',coverage:'Perlindungan',premium:'Premium',nominee:'Penama',purpose:'Tujuan',status:'Status',maturity:'Matang',
+ premSummary:'Ringkasan premium',annualPrem:'Jumlah premium tahunan',monthlyEq:'Bersamaan bulanan',ofIncome:'Bahagian pendapatan tahunan',
+ changes:'Dikemas kini dalam semakan ini',noChanges:'Tiada perubahan dibuat dalam semakan ini.',item:'Perkara',from:'Sebelum',to:'Selepas',
+ enhance:'Bidang untuk dipertingkatkan',allGood:'Perlindungan anda mencapai semua tahap yang disyorkan. Syabas!',notes:'Catatan perunding',nextReview:'Semakan seterusnya',
+ sigClient:'Tandatangan pelanggan / tarikh',sigAdvisor:'Tandatangan perunding / tarikh',none:'Tiada',
+ disclaimer:'Ringkasan ini untuk tujuan perbincangan sahaja dan berdasarkan maklumat pada tarikh semakan. Tahap yang disyorkan ialah panduan umum, bukan nasihat kewangan; sila rujuk kontrak polisi anda untuk terma dan syarat penuh.',
+ cv:{life:'Hayat',ci:'PK',medical:'Perubatan',savings:'Simpanan',retirement:'Persaraan'},
+ stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang'},
+ freq:{Monthly:'bulanan',Quarterly:'suku tahunan','Half-yearly':'separuh tahunan',Yearly:'tahunan',Single:'sekali bayar'},
+ field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had perubatan',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan'},
+ act_life:a=>`Tingkatkan perlindungan hayat sebanyak kira-kira ${a}`,act_ci:a=>`Tingkatkan perlindungan penyakit kritikal sebanyak kira-kira ${a}`,act_medical:a=>`Tingkatkan had tahunan perubatan/hospital sebanyak kira-kira ${a}`,
+ act_savings:a=>`Tambah dana pendidikan/simpanan sebanyak kira-kira ${a}`,act_retirement:a=>`Tambah dana persaraan sebanyak kira-kira ${a}`,act_nominee:p=>`Lantik penama untuk polisi ${p}`,
+ act_lapsed:p=>`Pertimbangkan untuk mengembalikan semula polisi luput ${p}`,act_afford:()=>'Premium melebihi 15% pendapatan. Semak kemampuan bersama.'}
+};
+function actionText(a,lang){const fn=T[lang][a.k];return fn(typeof a.v==='number'?money(a.v):a.v)}
+function setLang(l){view.lang=l;renderReport()}
+function renderReport(){
+  const c=getClient();if(!c)return go('portfolio');
+  const L=T[view.lang];
+  const fv=(f,v)=>f==='status'?(L.stat[v]||v):f==='frequency'?(L.freq[v]||v):fmtVal(f,v);
+  const cl=changes.filter(x=>x.clientId===c.id);
+  const covTxt=p=>AREAS.filter(k=>p[k]).map(k=>`${L.cv[k]} ${money(p[k])}`).join('<br>')||'—';
+  const shown=c.policies.filter(p=>p.status!=='Surrendered'&&p.status!=='Matured');
+  $('#app').innerHTML=`
+  <div class="rep-bar no-print">
+    <button class="btn" onclick="go('client')">← Back to review</button>
+    <div class="seg">${[['en','English'],['zh','中文'],['ms','Bahasa Malaysia']].map(([k,n])=>`<button class="${view.lang===k?'on':''}" onclick="setLang('${k}')">${n}</button>`).join('')}</div>
+    <button class="btn primary" onclick="window.print()">🖨 Print / Save as PDF</button>
+    <span class="muted" style="font-size:12px">Tip: in the print dialog choose "Save as PDF" to email or WhatsApp it to the client.</span>
+  </div>
+  <div class="report" lang="${view.lang==='zh'?'zh':view.lang}">
+    <div class="r-head">
+      <div><h1>${L.title}</h1><div class="who">${L.preparedFor}<br><b>${esc(c.name||c.id)}</b></div></div>
+      <div class="meta">${L.reviewDate}: <b>${fmtDate(today())}</b><br>${L.nextReview}: <b>${fmtDate(addYear(today()))}</b>
+      ${S.advisor?`<br>${L.preparedBy}: <b>${esc(S.advisor)}</b>`:''}${S.branch?`<br>${esc(S.branch)}`:''}${S.phone?`<br>☎ ${esc(S.phone)}`:''}</div>
+    </div>
+
+    <div class="r-sec"><h2>${L.glance}</h2>
+      <div class="r-score" style="margin-bottom:12px"><div class="big">${c.score}%</div><div><b>${L.score}</b><div class="muted" style="font-size:12px">${L.scoreHint}</div></div></div>
+      <div class="r-areas">${c.areas.map(a=>`<div class="r-area"><div class="top"><span class="name">${L['area_'+a.key]}</span><span class="pill p-${a.status}">${L['st_'+a.status]}</span></div>
+        <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
+        <div class="meta">${L.youHave}: <b>${money(a.have)}</b> · ${L.recommended}: <b>${a.target?money(a.target):L.notRequired}</b>${a.pct!==null?` · ${Math.round(a.pct*100)}%`:''}</div></div>`).join('')}</div>
+    </div>
+
+    <div class="r-sec"><h2>${L.policies}</h2>
+      <table class="r-table"><thead><tr><th>${L.plan}</th><th>${L.policyNo}</th><th>${L.coverage}</th><th class="num">${L.premium}</th><th>${L.nominee}</th><th>${L.purpose}</th><th>${L.status}</th></tr></thead>
+      <tbody>${shown.map(p=>`<tr><td><b>${esc(p.plan||'—')}</b><div class="muted">${esc(p.type)}</div></td><td class="nw">${esc(p.policyNo)}</td><td>${covTxt(p)}</td>
+        <td class="num nw">${money(p.premium)}<div class="muted">${L.freq[p.frequency]||''}</div></td>
+        <td>${p.nominee?esc(p.nominee)+(p.nomineeRel?`<div class="muted">${esc(p.nomineeRel)}</div>`:''):`<span style="color:var(--gap)">${L.none}</span>`}</td>
+        <td>${esc(p.purpose||'—')}</td><td>${p.status==='Proposed'?`<span class="tag-new">${L.stat.Proposed}</span>`:esc(L.stat[p.status]||p.status)}</td></tr>`).join('')}</tbody></table>
+    </div>
+
+    <div class="r-sec"><h2>${L.premSummary}</h2>
+      <div class="r-prem"><div><span>${L.annualPrem}</span><b>${money(c.annual)}</b></div><div><span>${L.monthlyEq}</span><b>${money(c.annual/12)}</b></div>
+      ${c.income?`<div><span>${L.ofIncome}</span><b>${(c.annual/c.income*100).toFixed(1)}%</b></div>`:''}</div>
+    </div>
+
+    <div class="r-sec"><h2>${L.changes}</h2>
+      ${cl.length?`<table class="r-table"><thead><tr><th>${L.policyNo}</th><th>${L.item}</th><th>${L.from}</th><th>${L.to}</th></tr></thead><tbody>
+      ${cl.map(x=>`<tr><td>${esc(x.policyNo)}</td><td>${esc(L.field[x.field]||x.field)}</td><td class="muted">${esc(x.field==='lastReview'?fmtDate(x.from):fv(x.field,x.from))}</td><td><b>${esc(x.field==='lastReview'?fmtDate(x.to):fv(x.field,x.to))}</b></td></tr>`).join('')}</tbody></table>`:`<div class="muted">${L.noChanges}</div>`}
+    </div>
+
+    <div class="r-sec"><h2>${L.enhance}</h2>
+      ${c.actions.length?`<ul class="r-enh">${c.actions.map(a=>`<li><span class="dot s-${a.sev}"></span>${esc(actionText(a,view.lang))}</li>`).join('')}</ul>`:`<div>✅ ${L.allGood}</div>`}
+    </div>
+
+    ${notes[c.id]?`<div class="r-sec"><h2>${L.notes}</h2><div style="white-space:pre-wrap">${esc(notes[c.id])}</div></div>`:''}
+
+    <div class="r-sign"><div>${L.sigClient}</div><div>${L.sigAdvisor}</div></div>
+    <div class="r-disc">${L.disclaimer}</div>
+  </div>`;
+}
+
+/* ================= export / template ================= */
+function sheetRows(list){return list.map(p=>Object.fromEntries(COLS.map(([f,h])=>[h,['lastReview','start','maturity'].includes(f)?fmtDate(p[f]).replace('—',''):p[f]])))}
+function needXLSX(){if(!window.XLSX){alert('Excel library could not load. Make sure xlsx.full.min.js is in the same folder as this app.');return false}return true}
+function exportUpdated(){
+  if(!policies.length)return toast('Load data first');
+  if(!needXLSX())return;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(policies)),'Policies');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(changes.length?changes.map(x=>({'Client ID':x.clientId,'Policy No':x.policyNo,Field:FIELD_LABEL[x.field]||x.field,Before:x.field==='lastReview'?fmtDate(x.from):x.from,After:x.field==='lastReview'?fmtDate(x.to):x.to,'Changed at':x.at})):[{Note:'No changes'}]),'Change Log');
+  const noteRows=Object.keys(notes).filter(k=>notes[k]).map(k=>({'Client ID':k,Notes:notes[k]}));
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(noteRows.length?noteRows:[{Note:'No notes'}]),'Review Notes');
+  XLSX.writeFile(wb,`Policy-Review-${today()}.xlsx`);dirty=false;toast('Updated Excel exported');
+}
+function downloadTemplate(){
+  if(!needXLSX())return;
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(sampleData())),'Policies');
+  const help=[['Column','What to enter'],
+   ['Client ID','IC / CIF / client number. Rows with the same ID are grouped as one client.'],
+   ['Client Name, Age, Annual Income, Dependants','Client profile. Income drives the coverage targets; dependants drive the education target.'],
+   ['Last Review Date','dd/mm/yyyy. Next review = +12 months.'],
+   ['Policy No, Plan Name, Policy Type','From ePartner policy list.'],
+   ['Life Cover / CI Cover / Medical Limit','Sum assured for each benefit. A policy can fill more than one column (e.g. life + CI rider).'],
+   ['Education/Savings Value, Retirement Value','Projected maturity / fund value earmarked for that goal.'],
+   ['Premium + Frequency','Premium per payment, and Monthly / Quarterly / Half-yearly / Yearly / Single.'],
+   ['Nominee, Nominee Relationship, Purpose','As recorded; update during review.'],
+   ['Status','Active / Lapsed / Surrendered / Matured / Proposed.'],
+   ['Tip','Delete the sample rows and paste your ePartner export. Your own header names also work if they are common (e.g. "Sum Assured", "Beneficiary", "Payment Mode").']];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(help),'Instructions');
+  XLSX.writeFile(wb,'Policy-Summary-Template.xlsx');
+}
+
+/* ================= settings ================= */
+const SKEYS=Object.keys(DEFAULTS);
+function openSettings(){SKEYS.forEach(k=>$('#st-'+k).value=S[k]);$('#settings').classList.add('open')}
+function closeSettings(){$('#settings').classList.remove('open')}
+function saveSettings(){SKEYS.forEach(k=>{const v=$('#st-'+k).value;S[k]=typeof DEFAULTS[k]==='number'?(parseFloat(v)||0):v});
+  try{localStorage.setItem('cps-settings',JSON.stringify(S))}catch(e){}closeSettings();render();toast('Settings saved')}
+
+/* ================= sample data ================= */
+function sampleData(){
+  const P=(clientId,clientName,age,income,dependants,lastReview,policyNo,plan,type,life,ci,medical,savings,retirement,premium,frequency,nominee,nomineeRel,purpose,start,maturity,status='Active')=>
+    ({clientId,clientName,age,income,dependants,lastReview,policyNo,plan,type,life,ci,medical,savings,retirement,premium,frequency,nominee,nomineeRel,purpose,start,maturity,status});
+  return[
+   P('C1001','Tan Wei Ming',38,120000,2,'2025-11-12','L2018-00451','SecureLife Plus','Whole Life',500000,150000,0,0,0,380,'Monthly','Lim Mei Ling','Spouse','Family income protection','2018-03-01','2083-03-01'),
+   P('C1001','Tan Wei Ming',38,120000,2,'2025-11-12','M2020-01877','MediShield Gold','Medical',0,0,1500000,0,0,210,'Monthly','Lim Mei Ling','Spouse','Hospital & surgical','2020-07-15','2055-07-15'),
+   P('C1001','Tan Wei Ming',38,120000,2,'2025-11-12','E2021-00932','EduSaver 18','Endowment',50000,0,0,120000,0,6000,'Yearly','Tan Jia Hui','Daughter','Child university fund','2021-01-10','2039-01-10'),
+   P('C1002','Nur Aisyah binti Rahman',29,72000,0,'2025-12-02','L2022-03310','Takaful Hayat Prima','Family Takaful',300000,0,0,0,0,150,'Monthly','Rahman bin Yusof','Father','Protection for parents','2022-05-20','2072-05-20'),
+   P('C1002','Nur Aisyah binti Rahman',29,72000,0,'2025-12-02','C2023-00218','CI Guard 36','Critical Illness',0,200000,0,0,0,95,'Monthly','','','Income replacement if seriously ill','2023-02-01','2060-02-01'),
+   P('C1003','Rajesh Kumar a/l Subramaniam',46,180000,3,'2024-10-05','L2010-11201','LifeMax 100','Whole Life',800000,300000,0,0,0,5200,'Half-yearly','Priya Devi','Spouse','Mortgage & family protection','2010-09-01','2064-09-01'),
+   P('C1003','Rajesh Kumar a/l Subramaniam',46,180000,3,'2024-10-05','R2015-07743','RetireWell 60','Retirement',0,0,0,0,650000,12000,'Yearly','Priya Devi','Spouse','Retirement income from age 60','2015-04-01','2039-04-01'),
+   P('C1003','Rajesh Kumar a/l Subramaniam',46,180000,3,'2024-10-05','M2012-05521','MediCare Family','Medical',0,0,800000,0,0,320,'Monthly','Priya Devi','Spouse','Hospital & surgical','2012-01-01','2052-01-01'),
+   P('C1003','Rajesh Kumar a/l Subramaniam',46,180000,3,'2024-10-05','E2016-00120','EduSaver 18','Endowment',30000,0,0,90000,0,4500,'Yearly','Arjun Kumar','Son','Child education','2016-06-01','2030-06-01','Lapsed'),
+   P('C1004','Lee Siew Peng',55,96000,0,'2026-02-18','L2005-02234','SecureLife Classic','Whole Life',400000,100000,0,0,0,3600,'Yearly','Lee Chong Wei','Son','Legacy for children','2005-08-01','2070-08-01'),
+   P('C1004','Lee Siew Peng',55,96000,0,'2026-02-18','M2018-04410','MediShield Gold','Medical',0,0,1200000,0,0,480,'Monthly','Lee Chong Wei','Son','Hospital & surgical','2018-03-01','2048-03-01'),
+   P('C1004','Lee Siew Peng',55,96000,0,'2026-02-18','R2008-01109','Golden Years Annuity','Retirement',0,0,0,0,900000,15000,'Yearly','Lee Chong Wei','Son','Retirement income','2008-01-01','2031-01-01'),
+   P('C1005','Muhammad Faiz bin Ismail',33,60000,1,'','I2024-08812','InvestLink Growth','Investment-linked',250000,50000,0,40000,0,250,'Monthly','','','Protection + investment','2024-04-01','2091-04-01'),
+   P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','L2016-09981','LifeMax 100','Whole Life',1500000,500000,0,0,0,9800,'Yearly','Chan Siu Ming','Spouse','Family income protection','2016-02-01','2085-02-01'),
+   P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','M2016-09982','MediShield Gold','Medical',0,0,2000000,0,0,260,'Monthly','Chan Siu Ming','Spouse','Hospital & surgical','2016-02-01','2050-02-01'),
+   P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','E2017-03321','EduSaver 18','Endowment',60000,0,0,320000,0,15000,'Yearly','Chan Siu Ming','Spouse','Two children university fund','2017-05-01','2035-05-01'),
+   P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','R2019-04450','RetireWell 60','Retirement',0,0,0,0,1600000,18000,'Yearly','Chan Siu Ming','Spouse','Retirement at 60','2019-09-01','2044-09-01'),
+  ];
+}
+function loadSample(){if(dirty&&!confirm('Discard unsaved review changes?'))return;setData(sampleData().map(p=>({...p})));toast('Sample data loaded: 6 clients, 17 policies')}
+
+render();
+// offline support when installed on a phone (only over http/https, not when opened as a local file)
+if('serviceWorker' in navigator&&location.protocol.startsWith('http'))navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>
