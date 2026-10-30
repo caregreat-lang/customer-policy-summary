@@ -103,6 +103,8 @@ tr.click:hover td{background:var(--soft)}
 .prof-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px}
 .prof-edit label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
 .prof-edit input{padding:6px 8px;border:1px solid var(--brand2);border-radius:6px;font-weight:600;min-width:200px}
+.merge-hint{background:var(--partialbg);border-color:#f0d48a;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.merge-hint select{padding:6px 8px;border:1px solid var(--line);border-radius:6px;max-width:100%;background:#fff}
 .cov-edit{margin-top:8px;padding:10px;border:1px dashed var(--brand2);border-radius:8px;background:var(--soft);display:grid;gap:8px}
 .cov-edit label{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
 .cov-edit .amt{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
@@ -565,7 +567,7 @@ function analyse(c){
 }
 
 /* ================= navigation ================= */
-function go(name,clientId){view.name=name;if(clientId!==undefined&&clientId!==view.clientId){view.clientId=clientId;view.editProfile=false;view.editArea=null}render();window.scrollTo(0,0)}
+function go(name,clientId){view.name=name;if(clientId!==undefined&&clientId!==view.clientId){view.clientId=clientId;view.editProfile=false;view.editArea=null;view.mergeOpen=false}render();window.scrollTo(0,0)}
 function render(){
   if(!policies.length)return renderEmpty();
   if(view.name==='client')return renderClient();
@@ -661,10 +663,12 @@ function renderClient(){
       <div class="facts"><span>ID <b>${esc(c.id)}</b></span><span>Age <b>${c.age||'—'}</b></span><label>Annual income ${esc(S.currency)} <input class="fact-in${changedCells.has(c.id+'|income')?' changed':''}" data-cf="income" inputmode="decimal" value="${c.income||''}" placeholder="enter" style="width:96px"></label><label>Dependants <input class="fact-in${changedCells.has(c.id+'|dependants')?' changed':''}" data-cf="dependants" inputmode="numeric" value="${c.dependants||0}" style="width:44px"></label>
       <span>Last review <b>${fmtDate(c.lastReview)}</b></span><span>Next review <b>${fmtDate(c.nextReview)}</b> ${d!==null&&d<0?'<span class="pill p-gap">overdue</span>':''}</span></div></div>
     <div class="actions">
+      <button class="btn" onclick="view.mergeOpen=!view.mergeOpen;renderClient()">⇄ Merge</button>
       <button class="btn" onclick="markReviewed()">✔ Mark reviewed today</button>
       <button class="btn primary" onclick="go('report')">📄 Client report</button>
     </div>
   </div>
+  ${mergePanel(c)}
   <div id="cv-analysis"></div>
   <div class="card">
     <h2>Update policies with the client <span class="sub">edit any cell; changes are highlighted and logged</span></h2>
@@ -688,7 +692,11 @@ function renderClient(){
 function saveProfile(){
   const c=getClient(),name=$('#pe-name').value.trim(),id=$('#pe-id').value.trim();
   if(!id)return alert('Client ID cannot be empty.');
-  if(id!==c.id&&policies.some(p=>p.clientId===id)){const o=clients().find(x=>x.id===id);return alert(`ID ${id} is already used by ${o?.name||'another client'}.`)}
+  if(id!==c.id&&policies.some(p=>p.clientId===id)){
+    const o=clients().find(x=>x.id===id);
+    if(confirm(`ID ${id} is already used by ${o?.name||'another client'}.\n\nMerge ${c.name||c.id}'s ${c.policies.length} polic${c.policies.length===1?'y':'ies'} into ${o?.name||id}? They will share one review and one report.`)){view.editProfile=false;mergeClient(c.id,id,true)}
+    return;
+  }
   const at=new Date().toLocaleString('en-GB');
   if(name!==c.name){changes.push({clientId:c.id,policyNo:'(all)',field:'clientName',from:c.name,to:name,at});c.policies.forEach(p=>p.clientName=name);changedCells.add(c.id+'|clientName')}
   if(id!==c.id){
@@ -701,6 +709,33 @@ function saveProfile(){
   }
   if(name!==c.name||id!==c.id){dirty=true;toast('Client details updated')}
   view.editProfile=false;renderClient();
+}
+// same person split into several clients (e.g. different IDs across ePartner PDFs): combine into one review and report
+const sameName=(a,b)=>!!a&&normKey(a)===normKey(b);
+function mergePanel(c){
+  const others=clients().filter(o=>o.id!==c.id);
+  const dups=others.filter(o=>sameName(o.name,c.name));
+  let html='';
+  if(dups.length&&!view.mergeOpen)html+=`<div class="card merge-hint">⚠ Possible duplicate: ${dups.map(o=>`<b>${esc(o.name)}</b> (ID ${esc(o.id)}, ${o.policies.length} polic${o.policies.length===1?'y':'ies'}) <button class="btn primary" onclick="mergeClient('${esc(o.id)}','${esc(c.id)}')">Merge into this client</button>`).join(' ')}</div>`;
+  if(view.mergeOpen)html+=`<div class="card merge-hint"><b>Merge another client into ${esc(c.name||c.id)}</b>
+    <div class="muted" style="font-size:12px;margin:4px 0 8px">Their policies move here and appear in this client's review and report. Name and ID stay as shown above.</div>
+    ${others.length?`<select id="merge-from">${[...dups,...others.filter(o=>!dups.includes(o)).sort((a,b)=>(a.name||'').localeCompare(b.name||''))].map(o=>`<option value="${esc(o.id)}">${esc(o.name||o.id)} · ID ${esc(o.id)} · ${o.policies.length} polic${o.policies.length===1?'y':'ies'}${dups.includes(o)?' · same name':''}</option>`).join('')}</select>
+    <button class="btn primary" onclick="mergeClient($('#merge-from').value,'${esc(c.id)}')">Merge</button>`:'<span class="muted">No other clients loaded.</span>'}
+    <button class="btn" onclick="view.mergeOpen=false;renderClient()">Cancel</button></div>`;
+  return html;
+}
+function mergeClient(fromId,toId,confirmed){
+  const all=clients(),from=all.find(x=>x.id===fromId),to=all.find(x=>x.id===toId);if(!from||!to||fromId===toId)return;
+  if(!confirmed&&!confirm(`Merge ${from.name||from.id} (ID ${from.id}, ${from.policies.length} polic${from.policies.length===1?'y':'ies'}) into ${to.name||to.id} (ID ${to.id})?`))return;
+  const prof={};['income','dependants','age','lastReview'].forEach(f=>prof[f]=to[f]||from[f]||(f==='lastReview'?'':0));
+  from.policies.forEach(p=>{p.clientId=toId;p.clientName=to.name||from.name});
+  policies.filter(p=>p.clientId===toId).forEach(p=>Object.assign(p,prof));
+  if(notes[fromId]){notes[toId]=[notes[toId],notes[fromId]].filter(Boolean).join('\n');delete notes[fromId]}
+  changes.forEach(x=>{if(x.clientId===fromId)x.clientId=toId});
+  changes.push({clientId:toId,policyNo:from.policies.map(p=>p.policyNo).join(', '),field:'clientId',from:fromId,to:toId,at:new Date().toLocaleString('en-GB')});
+  [...changedCells].filter(k=>k.startsWith(fromId+'|')).forEach(k=>{changedCells.delete(k);changedCells.add(toId+k.slice(fromId.length))});
+  dirty=true;view.mergeOpen=false;view.clientId=toId;renderClient();
+  toast(`Merged ${from.policies.length} polic${from.policies.length===1?'y':'ies'} into ${to.name||to.id}`);
 }
 function cellIn(p,f,cls=''){
   const ch=changedCells.has(p._i+'|'+f)?' changed':'';
