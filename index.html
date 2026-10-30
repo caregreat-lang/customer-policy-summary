@@ -96,8 +96,18 @@ tr.click:hover td{background:var(--soft)}
 /* editor */
 .edit-wrap{overflow-x:auto}
 .edit td{padding:4px 4px}
-.edit input,.edit select{width:100%;min-width:80px;padding:5px 6px;border:1px solid transparent;border-radius:6px;background:transparent}
-.edit input:hover,.edit select:hover{border-color:var(--line)}
+.edit input,.edit select{width:100%;min-width:80px;padding:5px 6px;border:1px solid var(--line);border-radius:6px;background:#fff}
+.edit input:hover,.edit select:hover{border-color:var(--brand2)}
+.pen{border:1px solid var(--line);background:#fff;color:var(--brand2);border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600;cursor:pointer;vertical-align:middle;margin-left:4px}
+.pen:hover{border-color:var(--brand2);background:var(--soft)}
+.prof-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px}
+.prof-edit label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
+.prof-edit input{padding:6px 8px;border:1px solid var(--brand2);border-radius:6px;font-weight:600;min-width:200px}
+.cov-edit{margin-top:8px;padding:10px;border:1px dashed var(--brand2);border-radius:8px;background:var(--soft);display:grid;gap:8px}
+.cov-edit label{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.cov-edit .amt{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
+.cov-edit input{width:130px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;text-align:right;background:#fff}
+.cov-edit input.changed{background:#fff6d6;border-color:#f0d48a}
 .edit input:focus,.edit select:focus{outline:none;border-color:var(--brand2);background:#fff}
 .edit input.n{text-align:right;min-width:95px}
 .edit input.w{min-width:140px}
@@ -555,7 +565,7 @@ function analyse(c){
 }
 
 /* ================= navigation ================= */
-function go(name,clientId){view.name=name;if(clientId!==undefined)view.clientId=clientId;render();window.scrollTo(0,0)}
+function go(name,clientId){view.name=name;if(clientId!==undefined&&clientId!==view.clientId){view.clientId=clientId;view.editProfile=false;view.editArea=null}render();window.scrollTo(0,0)}
 function render(){
   if(!policies.length)return renderEmpty();
   if(view.name==='client')return renderClient();
@@ -645,7 +655,9 @@ function renderClient(){
   <div class="toolbar no-print"><button class="btn" onclick="go('portfolio')">← All clients</button></div>
   <div class="card chead">
     <div class="avatar">${esc(initials)}</div>
-    <div><h1>${esc(c.name||c.id)}</h1>
+    <div>${view.editProfile?`<div class="prof-edit"><label>Name<input id="pe-name" value="${esc(c.name)}"></label><label>ID<input id="pe-id" value="${esc(c.id)}"></label>
+        <button class="btn primary" onclick="saveProfile()">Save</button><button class="btn" onclick="view.editProfile=false;renderClient()">Cancel</button></div>`
+      :`<h1>${esc(c.name||c.id)} <button class="pen" title="Edit name and ID" onclick="view.editProfile=true;renderClient();$('#pe-name').focus()">✏ Edit</button></h1>`}
       <div class="facts"><span>ID <b>${esc(c.id)}</b></span><span>Age <b>${c.age||'—'}</b></span><label>Annual income ${esc(S.currency)} <input class="fact-in${changedCells.has(c.id+'|income')?' changed':''}" data-cf="income" inputmode="decimal" value="${c.income||''}" placeholder="enter" style="width:96px"></label><label>Dependants <input class="fact-in${changedCells.has(c.id+'|dependants')?' changed':''}" data-cf="dependants" inputmode="numeric" value="${c.dependants||0}" style="width:44px"></label>
       <span>Last review <b>${fmtDate(c.lastReview)}</b></span><span>Next review <b>${fmtDate(c.nextReview)}</b> ${d!==null&&d<0?'<span class="pill p-gap">overdue</span>':''}</span></div></div>
     <div class="actions">
@@ -672,6 +684,24 @@ function renderClient(){
   </div>`;
   renderAnalysis();renderLog();
 }
+// rename a client or change their ID: applies to all their policies, notes and change log
+function saveProfile(){
+  const c=getClient(),name=$('#pe-name').value.trim(),id=$('#pe-id').value.trim();
+  if(!id)return alert('Client ID cannot be empty.');
+  if(id!==c.id&&policies.some(p=>p.clientId===id)){const o=clients().find(x=>x.id===id);return alert(`ID ${id} is already used by ${o?.name||'another client'}.`)}
+  const at=new Date().toLocaleString('en-GB');
+  if(name!==c.name){changes.push({clientId:c.id,policyNo:'(all)',field:'clientName',from:c.name,to:name,at});c.policies.forEach(p=>p.clientName=name);changedCells.add(c.id+'|clientName')}
+  if(id!==c.id){
+    changes.forEach(x=>{if(x.clientId===c.id)x.clientId=id});
+    changes.push({clientId:id,policyNo:'(all)',field:'clientId',from:c.id,to:id,at});
+    c.policies.forEach(p=>p.clientId=id);
+    if(notes[c.id]!==undefined){notes[id]=notes[c.id];delete notes[c.id]}
+    [...changedCells].filter(k=>k.startsWith(c.id+'|')).forEach(k=>{changedCells.delete(k);changedCells.add(id+k.slice(c.id.length))});
+    view.clientId=id;
+  }
+  if(name!==c.name||id!==c.id){dirty=true;toast('Client details updated')}
+  view.editProfile=false;renderClient();
+}
 function cellIn(p,f,cls=''){
   const ch=changedCells.has(p._i+'|'+f)?' changed':'';
   const v=NUM.has(f)?(p[f]||''):p[f];
@@ -693,9 +723,13 @@ function renderAnalysis(){
   let acc=0;const grad=entries.map(([,v],i)=>{const a=acc/c.annual*360;acc+=v;return `${PALETTE[i%PALETTE.length]} ${a}deg ${acc/c.annual*360}deg`}).join(',');
   $('#cv-analysis').innerHTML=`<div class="grid g2">
     <div class="card"><h2>Coverage vs recommended <span class="sub">overall protection score <b style="color:var(--brand)">${c.score}%</b></span></h2>
-      ${c.areas.map(a=>`<div class="cov"><div class="top"><span class="name">${AREA_EN[a.key]}</span><span class="pill p-${a.status}">${a.pct===null?'N/A':Math.round(a.pct*100)+'%'}</span></div>
+      ${c.areas.map(a=>`<div class="cov"><div class="top"><span class="name">${AREA_EN[a.key]} <button class="pen" title="Edit ${AREA_EN[a.key]} amount" onclick="view.editArea=view.editArea==='${a.key}'?null:'${a.key}';renderAnalysis()">${view.editArea===a.key?'✕ Close':'✏ Edit'}</button></span><span class="pill p-${a.status}">${a.pct===null?'N/A':Math.round(a.pct*100)+'%'}</span></div>
         <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
-        <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div></div>`).join('')}
+        <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div>
+        ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{const ch=changedCells.has(p._i+'|'+a.key)?' changed':'';
+          return `<label><span><b>${esc(p.plan||p.policyNo)}</b> <span class="muted">${esc(p.policyNo)}${p.status!=='Active'?' · '+esc(p.status):''}</span></span>
+          <span class="amt">${esc(S.currency)} <input class="${ch}" data-i="${p._i}" data-f="${a.key}" inputmode="decimal" value="${p[a.key]||''}" placeholder="0"></span></label>`}).join('')}
+          <div class="muted" style="font-size:12px">Only Active policies count toward coverage. Changes are logged and shown on the client report.</div></div>`:''}</div>`).join('')}
     </div>
     <div>
       <div class="card"><h2>Premium breakdown</h2>
@@ -730,6 +764,7 @@ document.addEventListener('change',e=>{
   changes.push({clientId:p.clientId,policyNo:p.policyNo,field:f,from:p[f],to:nv,at:new Date().toLocaleString('en-GB')});
   p[f]=nv;changedCells.add(p._i+'|'+f);t.classList.add('changed');dirty=true;
   if(NUM.has(f))t.value=nv||'';
+  if(t.closest('.cov-edit'))return renderClient();   // keep the policy table in step
   renderAnalysis();renderLog();
 });
 document.addEventListener('input',e=>{if(e.target.id==='notes'){notes[view.clientId]=e.target.value;dirty=true}});
@@ -765,7 +800,7 @@ en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review 
  cv:{life:'Life',ci:'CI',medical:'Medical',savings:'Savings',retirement:'Retirement'},
  stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured'},
  freq:{Monthly:'monthly',Quarterly:'quarterly','Half-yearly':'half-yearly',Yearly:'yearly',Single:'single'},
- field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Medical limit',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date',income:'Annual income',dependants:'Dependants'},
+ field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Medical limit',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date',income:'Annual income',dependants:'Dependants',clientName:'Client name',clientId:'Client ID'},
  act_life:a=>`Increase life protection by about ${a}`,act_ci:a=>`Increase critical illness protection by about ${a}`,act_medical:a=>`Increase medical / hospital coverage by about ${a} in annual limit`,
  act_savings:a=>`Build the education / savings fund by about ${a}`,act_retirement:a=>`Grow the retirement fund by about ${a}`,act_nominee:p=>`Appoint a nominee for policy ${p}`,
  act_lapsed:p=>`Consider reinstating lapsed policy ${p}`,act_afford:()=>'Premiums exceed 15% of income. Review affordability together.'},
@@ -781,7 +816,7 @@ zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日�
  cv:{life:'寿险',ci:'重疾',medical:'医疗',savings:'储蓄',retirement:'退休'},
  stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期'},
  freq:{Monthly:'每月',Quarterly:'每季','Half-yearly':'每半年',Yearly:'每年',Single:'一次性'},
- field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'医疗限额',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期',income:'年收入',dependants:'受抚养人数'},
+ field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'医疗限额',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期',income:'年收入',dependants:'受抚养人数',clientName:'客户姓名',clientId:'客户编号'},
  act_life:a=>`将人寿保障提高约 ${a}`,act_ci:a=>`将重大疾病保障提高约 ${a}`,act_medical:a=>`将医疗/住院年度限额提高约 ${a}`,
  act_savings:a=>`将教育/储蓄基金增加约 ${a}`,act_retirement:a=>`将退休基金增加约 ${a}`,act_nominee:p=>`为保单 ${p} 指定受益人`,
  act_lapsed:p=>`考虑恢复已失效的保单 ${p}`,act_afford:()=>'保费超过收入的15%，建议一起检视负担能力。'},
@@ -797,7 +832,7 @@ ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'
  cv:{life:'Hayat',ci:'PK',medical:'Perubatan',savings:'Simpanan',retirement:'Persaraan'},
  stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang'},
  freq:{Monthly:'bulanan',Quarterly:'suku tahunan','Half-yearly':'separuh tahunan',Yearly:'tahunan',Single:'sekali bayar'},
- field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had perubatan',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan',income:'Pendapatan tahunan',dependants:'Tanggungan'},
+ field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had perubatan',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan',income:'Pendapatan tahunan',dependants:'Tanggungan',clientName:'Nama pelanggan',clientId:'ID pelanggan'},
  act_life:a=>`Tingkatkan perlindungan hayat sebanyak kira-kira ${a}`,act_ci:a=>`Tingkatkan perlindungan penyakit kritikal sebanyak kira-kira ${a}`,act_medical:a=>`Tingkatkan had tahunan perubatan/hospital sebanyak kira-kira ${a}`,
  act_savings:a=>`Tambah dana pendidikan/simpanan sebanyak kira-kira ${a}`,act_retirement:a=>`Tambah dana persaraan sebanyak kira-kira ${a}`,act_nominee:p=>`Lantik penama untuk polisi ${p}`,
  act_lapsed:p=>`Pertimbangkan untuk mengembalikan semula polisi luput ${p}`,act_afford:()=>'Premium melebihi 15% pendapatan. Semak kemampuan bersama.'}
