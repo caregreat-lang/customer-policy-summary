@@ -120,6 +120,15 @@ body.dropping::after{content:"Drop Excel or PDF files to load them";position:fix
 .cov-edit label{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
 .cov-edit .amt{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted)}
 .cov-edit input{width:130px;padding:5px 7px;border:1px solid var(--line);border-radius:6px;text-align:right;background:#fff}
+.sublim{width:100%;margin-top:8px;border-collapse:collapse;font-size:12px}
+.sublim th{font-size:11px;font-weight:600;color:var(--muted);background:none;padding:3px 6px;border-bottom:1px solid var(--line)}
+.sublim td{padding:4px 6px;border-bottom:1px dashed var(--line)}
+.sublim tr:last-child td{border-bottom:0}
+.r-matrix .sub{font-size:10px;line-height:1.35;margin-top:2px}
+.amt3{display:flex;gap:8px;flex-wrap:wrap}
+.cov-edit .amt small{display:block;width:100%;font-size:10.5px;color:var(--muted)}
+.cov-edit .amt3 .amt{flex-wrap:wrap;width:165px;column-gap:4px}
+.cov-edit .amt3 input{width:128px}
 .cov-edit input.changed{background:#fff6d6;border-color:#f0d48a}
 .edit input:focus,.edit select:focus{outline:none;border-color:var(--brand2);background:#fff}
 .edit input.n{text-align:right;min-width:95px}
@@ -261,7 +270,9 @@ const COLS=[
  ['type','Policy Type',['policytype','type','category','producttype']],
  ['life','Life Cover',['lifecover','sumassured','deathbenefit','life','basicsumassured']],
  ['ci','CI Cover',['cicover','criticalillness','ci','cisumassured','criticalillnesscover']],
- ['medical','Medical Limit',['medicallimit','medical','hospital','annuallimit','medicalcard']],
+ ['medical','Medical Limit',['medicallimit','medical','hospital','annuallimit','medicalcard','annualmedicallimit']],
+ ['medLifetime','Lifetime Limit',['lifetimelimit','lifetime','lifetimemedicallimit','overalllifetimelimit','lifetimelimitamount']],
+ ['roomBoard','Room & Board',['roomboard','roomandboard','roomboardperday','roomandboardperday','rb','dailyroomandboard','roomboardlimit','roomrate']],
  ['savings','Education/Savings Value',['educationsavingsvalue','savingsvalue','savings','education','maturityvalue']],
  ['retirement','Retirement Value',['retirementvalue','retirement','retirementfund']],
  ['premium','Premium',['premium','premiumamount','modalpremium','installmentpremium']],
@@ -273,7 +284,7 @@ const COLS=[
  ['maturity','Maturity Date',['maturitydate','expirydate','maturity']],
  ['status','Status',['status','policystatus']],
 ];
-const NUM=new Set(['age','income','dependants','life','ci','medical','savings','retirement','premium']);
+const NUM=new Set(['age','income','dependants','life','ci','medical','medLifetime','roomBoard','savings','retirement','premium']);
 const FIELD_LABEL=Object.fromEntries(COLS.map(c=>[c[0],c[1]]));
 
 /* ================= state ================= */
@@ -709,7 +720,7 @@ function renderClient(){
     <h2>Update policies with the client <span class="sub">edit any cell; changes are highlighted and logged</span></h2>
     <div class="edit-wrap"><table class="edit">
       <thead><tr><th>Policy no.</th><th>Plan</th><th>Type</th><th>Status</th><th class="num">Premium</th><th>Frequency</th>
-      <th class="num">Life cover</th><th class="num">CI cover</th><th class="num">Medical limit</th><th class="num">Edu/Savings</th><th class="num">Retirement</th>
+      <th class="num">Life cover</th><th class="num">CI cover</th><th class="num">Medical annual limit</th><th class="num">Lifetime limit</th><th class="num">Room &amp; board / day</th><th class="num">Edu/Savings</th><th class="num">Retirement</th>
       <th>Nominee</th><th>Relationship</th><th>Purpose</th></tr></thead>
       <tbody>${c.policies.map(p=>editRow(p)).join('')}</tbody>
     </table></div>
@@ -744,6 +755,14 @@ function saveProfile(){
   }
   if(name!==c.name||id!==c.id){dirty=true;toast('Client details updated')}
   view.editProfile=false;renderClient();
+}
+// medical sub-limits (annual, lifetime, room & board per day) for each active medical policy
+function medSubHtml(c,L){
+  const list=c.policies.filter(p=>isActive(p)&&(p.medical||p.medLifetime||p.roomBoard));
+  if(!list.length)return'';
+  const m=v=>v?money(v):'—';
+  return `<table class="sublim"><thead><tr><th></th><th class="num">${L.subAnnual}</th><th class="num">${L.subLifetime}</th><th class="num">${L.subRB}</th></tr></thead><tbody>
+    ${list.map(p=>`<tr><td>${esc(p.plan||p.policyNo)}</td><td class="num nw">${m(p.medical)}</td><td class="num nw">${m(p.medLifetime)}</td><td class="num nw">${p.roomBoard?money(p.roomBoard)+L.perDay:'—'}</td></tr>`).join('')}</tbody></table>`;
 }
 // same person split into several clients (e.g. different IDs across ePartner PDFs): combine into one review and report
 const sameName=(a,b)=>!!a&&normKey(a)===normKey(b);
@@ -783,7 +802,7 @@ function cellSel(p,f,opts){
 }
 function editRow(p){
   return `<tr>${cellIn(p,'policyNo')}${cellIn(p,'plan','w')}${cellIn(p,'type')}${cellSel(p,'status',STATUSES)}${cellIn(p,'premium','n')}${cellSel(p,'frequency',Object.keys(FREQS))}
-  ${cellIn(p,'life','n')}${cellIn(p,'ci','n')}${cellIn(p,'medical','n')}${cellIn(p,'savings','n')}${cellIn(p,'retirement','n')}
+  ${cellIn(p,'life','n')}${cellIn(p,'ci','n')}${cellIn(p,'medical','n')}${cellIn(p,'medLifetime','n')}${cellIn(p,'roomBoard','n')}${cellIn(p,'savings','n')}${cellIn(p,'retirement','n')}
   ${cellIn(p,'nominee','w')}${cellIn(p,'nomineeRel')}${cellIn(p,'purpose','w')}</tr>`;
 }
 function renderAnalysis(){
@@ -796,9 +815,11 @@ function renderAnalysis(){
       ${c.areas.map(a=>`<div class="cov"><div class="top"><span class="name">${AREA_EN[a.key]} <button class="pen" title="Edit ${AREA_EN[a.key]} amount" onclick="view.editArea=view.editArea==='${a.key}'?null:'${a.key}';renderAnalysis()">${view.editArea===a.key?'✕ Close':'✏ Edit'}</button></span><span class="pill p-${a.status}">${a.pct===null?'N/A':Math.round(a.pct*100)+'%'}</span></div>
         <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
         <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div>
-        ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{const ch=changedCells.has(p._i+'|'+a.key)?' changed':'';
+        ${a.key==='medical'?medSubHtml(c,T.en):''}
+        ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{
+          const inp=(f,ph,lbl)=>`<span class="amt">${lbl?`<small>${lbl}</small>`:''}${esc(S.currency)} <input class="${changedCells.has(p._i+'|'+f)?'changed':''}" data-i="${p._i}" data-f="${f}" inputmode="decimal" value="${p[f]||''}" placeholder="${ph}"></span>`;
           return `<label><span><b>${esc(p.plan||p.policyNo)}</b> <span class="muted">${esc(p.policyNo)}${p.status!=='Active'?' · '+esc(p.status):''}</span></span>
-          <span class="amt">${esc(S.currency)} <input class="${ch}" data-i="${p._i}" data-f="${a.key}" inputmode="decimal" value="${p[a.key]||''}" placeholder="0"></span></label>`}).join('')}
+          ${a.key==='medical'?`<span class="amt3">${inp('medical','0','Annual')}${inp('medLifetime','0','Lifetime')}${inp('roomBoard','0','R&B / day')}</span>`:inp(a.key,'0')}</label>`}).join('')}
           <div class="muted" style="font-size:12px">Only Active policies count toward coverage. Changes are logged and shown on the client report.</div></div>`:''}</div>`).join('')}
     </div>
     <div>
@@ -868,10 +889,11 @@ en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review 
  enhance:'Areas to enhance',allGood:'Your coverage meets all recommended levels. Well done!',notes:'Advisor notes',nextReview:'Next review',
  sigClient:'Client signature / date',sigAdvisor:'Advisor signature / date',none:'Not stated',
  disclaimer:'This summary is for discussion purposes only and is based on information available on the review date. Recommended levels are general guidelines, not financial advice; please refer to your policy contracts for full terms and conditions.',
+ subAnnual:'Annual limit',subLifetime:'Lifetime limit',subRB:'Room & board',perDay:'/day',
  cv:{life:'Life',ci:'CI',medical:'Medical',savings:'Savings',retirement:'Retirement'},
  stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured',Terminated:'Terminated'},
  freq:{Monthly:'monthly',Quarterly:'quarterly','Half-yearly':'half-yearly',Yearly:'yearly',Single:'single'},
- field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Medical limit',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date',income:'Annual income',dependants:'Dependants',clientName:'Client name',clientId:'Client ID'},
+ field:{nominee:'Nominee',nomineeRel:'Nominee relationship',premium:'Premium',frequency:'Frequency',purpose:'Purpose',life:'Life cover',ci:'CI cover',medical:'Annual limit',medLifetime:'Lifetime limit',roomBoard:'Room & board / day',savings:'Savings value',retirement:'Retirement value',status:'Status',plan:'Plan',type:'Type',policyNo:'Policy no.',lastReview:'Review date',income:'Annual income',dependants:'Dependants',clientName:'Client name',clientId:'Client ID'},
  act_life:a=>`Increase life protection by about ${a}`,act_ci:a=>`Increase critical illness protection by about ${a}`,act_medical:a=>`Increase medical / hospital coverage by about ${a} in annual limit`,
  act_savings:a=>`Build the education / savings fund by about ${a}`,act_retirement:a=>`Grow the retirement fund by about ${a}`,act_nominee:p=>`Appoint a nominee for policy ${p}`,
  act_lapsed:p=>`Consider reinstating lapsed policy ${p}`,act_terminated:p=>`Policy ${p} has ended; its cover no longer protects you. Review replacement cover.`,act_afford:()=>'Premiums exceed 15% of income. Review affordability together.'},
@@ -885,10 +907,11 @@ zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日�
  enhance:'可加强的方面',allGood:'您的保障已达到所有建议水平，请继续保持！',notes:'顾问备注',nextReview:'下次检视',
  sigClient:'客户签名 / 日期',sigAdvisor:'顾问签名 / 日期',none:'未填写',
  disclaimer:'本摘要仅供讨论用途，依据检视当日的资料编制。建议保障水平仅为一般参考，并非理财建议；完整条款与细则请以保单合约为准。',
+ subAnnual:'年度限额',subLifetime:'终身限额',subRB:'房租',perDay:'/天',
  cv:{life:'寿险',ci:'重疾',medical:'医疗',savings:'储蓄',retirement:'退休'},
  stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期',Terminated:'已终止'},
  freq:{Monthly:'每月',Quarterly:'每季','Half-yearly':'每半年',Yearly:'每年',Single:'一次性'},
- field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'医疗限额',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期',income:'年收入',dependants:'受抚养人数',clientName:'客户姓名',clientId:'客户编号'},
+ field:{nominee:'受益人',nomineeRel:'受益人关系',premium:'保费',frequency:'缴费频率',purpose:'投保目的',life:'寿险保障',ci:'重疾保障',medical:'年度限额',medLifetime:'终身限额',roomBoard:'每日房租',savings:'储蓄价值',retirement:'退休价值',status:'状态',plan:'计划',type:'类别',policyNo:'保单号码',lastReview:'检视日期',income:'年收入',dependants:'受抚养人数',clientName:'客户姓名',clientId:'客户编号'},
  act_life:a=>`将人寿保障提高约 ${a}`,act_ci:a=>`将重大疾病保障提高约 ${a}`,act_medical:a=>`将医疗/住院年度限额提高约 ${a}`,
  act_savings:a=>`将教育/储蓄基金增加约 ${a}`,act_retirement:a=>`将退休基金增加约 ${a}`,act_nominee:p=>`为保单 ${p} 指定受益人`,
  act_lapsed:p=>`考虑恢复已失效的保单 ${p}`,act_terminated:p=>`保单 ${p} 已终止，不再提供保障。建议检视替代保障。`,act_afford:()=>'保费超过收入的15%，建议一起检视负担能力。'},
@@ -902,10 +925,11 @@ ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'
  enhance:'Bidang untuk dipertingkatkan',allGood:'Perlindungan anda mencapai semua tahap yang disyorkan. Syabas!',notes:'Catatan perunding',nextReview:'Semakan seterusnya',
  sigClient:'Tandatangan pelanggan / tarikh',sigAdvisor:'Tandatangan perunding / tarikh',none:'Tiada',
  disclaimer:'Ringkasan ini untuk tujuan perbincangan sahaja dan berdasarkan maklumat pada tarikh semakan. Tahap yang disyorkan ialah panduan umum, bukan nasihat kewangan; sila rujuk kontrak polisi anda untuk terma dan syarat penuh.',
+ subAnnual:'Had tahunan',subLifetime:'Had seumur hidup',subRB:'Bilik & makan',perDay:'/hari',
  cv:{life:'Hayat',ci:'PK',medical:'Perubatan',savings:'Simpanan',retirement:'Persaraan'},
  stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang',Terminated:'Ditamatkan'},
  freq:{Monthly:'bulanan',Quarterly:'suku tahunan','Half-yearly':'separuh tahunan',Yearly:'tahunan',Single:'sekali bayar'},
- field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had perubatan',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan',income:'Pendapatan tahunan',dependants:'Tanggungan',clientName:'Nama pelanggan',clientId:'ID pelanggan'},
+ field:{nominee:'Penama',nomineeRel:'Hubungan penama',premium:'Premium',frequency:'Kekerapan',purpose:'Tujuan',life:'Perlindungan hayat',ci:'Perlindungan PK',medical:'Had tahunan',medLifetime:'Had seumur hidup',roomBoard:'Bilik & makan / hari',savings:'Nilai simpanan',retirement:'Nilai persaraan',status:'Status',plan:'Pelan',type:'Jenis',policyNo:'No. polisi',lastReview:'Tarikh semakan',income:'Pendapatan tahunan',dependants:'Tanggungan',clientName:'Nama pelanggan',clientId:'ID pelanggan'},
  act_life:a=>`Tingkatkan perlindungan hayat sebanyak kira-kira ${a}`,act_ci:a=>`Tingkatkan perlindungan penyakit kritikal sebanyak kira-kira ${a}`,act_medical:a=>`Tingkatkan had tahunan perubatan/hospital sebanyak kira-kira ${a}`,
  act_savings:a=>`Tambah dana pendidikan/simpanan sebanyak kira-kira ${a}`,act_retirement:a=>`Tambah dana persaraan sebanyak kira-kira ${a}`,act_nominee:p=>`Lantik penama untuk polisi ${p}`,
  act_lapsed:p=>`Pertimbangkan untuk mengembalikan semula polisi luput ${p}`,act_terminated:p=>`Polisi ${p} telah tamat dan tidak lagi melindungi anda. Semak perlindungan gantian.`,act_afford:()=>'Premium melebihi 15% pendapatan. Semak kemampuan bersama.'}
@@ -917,7 +941,8 @@ function renderReport(){
   const L=T[view.lang];
   const fv=(f,v)=>f==='status'?(L.stat[v]||v):f==='frequency'?(L.freq[v]||v):fmtVal(f,v);
   const cl=changes.filter(x=>x.clientId===c.id);
-  const covTxt=p=>AREAS.filter(k=>p[k]).map(k=>`${L.cv[k]} ${money(p[k])}`).join('<br>')||'—';
+  const covTxt=p=>AREAS.filter(k=>p[k]).map(k=>`${L.cv[k]} ${money(p[k])}`)
+    .concat(p.medLifetime?[`${L.subLifetime} ${money(p.medLifetime)}`]:[],p.roomBoard?[`${L.subRB} ${money(p.roomBoard)}${L.perDay}`]:[]).join('<br>')||'—';
   const shown=c.policies.filter(p=>p.status!=='Surrendered'&&p.status!=='Matured');
   $('#app').innerHTML=`
   <div class="rep-bar no-print">
@@ -939,13 +964,14 @@ function renderReport(){
       <div class="r-score" style="margin-bottom:12px"><div class="big">${c.score}%</div><div><b>${L.score}</b><div class="muted" style="font-size:12px">${L.scoreHint}</div></div></div>
       <div class="r-areas">${c.areas.map(a=>`<div class="r-area"><div class="top"><span class="name">${L['area_'+a.key]}</span><span class="pill p-${a.status}">${L['st_'+a.status]}</span></div>
         <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
-        <div class="meta">${L.youHave}: <b>${money(a.have)}</b> · ${L.recommended}: <b>${a.target?money(a.target):L.notRequired}</b>${a.pct!==null?` · ${Math.round(a.pct*100)}%`:''}</div></div>`).join('')}</div>
+        <div class="meta">${L.youHave}: <b>${money(a.have)}</b> · ${L.recommended}: <b>${a.target?money(a.target):L.notRequired}</b>${a.pct!==null?` · ${Math.round(a.pct*100)}%`:''}</div>
+        ${a.key==='medical'?medSubHtml(c,L):''}</div>`).join('')}</div>
     </div>
 
     <div class="r-sec"><h2>${L.combined} <span class="r-count">${L.polCount(shown.length,shown.filter(isActive).length)}</span></h2>
       <table class="r-table r-matrix"><thead><tr><th>${L.plan} / ${L.policyNo}</th>${AREAS.map(k=>`<th class="num">${L.cv[k]}</th>`).join('')}<th class="num">${L.annualCol}</th></tr></thead>
       <tbody>${shown.map(p=>{const on=isActive(p);return `<tr class="${on?'':'off'}"><td><b>${esc(p.plan||'—')}</b><div class="muted nw">${esc(p.policyNo)} · ${p.status==='Proposed'?`<span class="tag-new">${L.stat.Proposed}</span>`:esc(L.stat[p.status]||p.status)}${on?'':` · ${L.notCounted}`}</div></td>
-        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
+        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}${k==='medical'&&(p.medLifetime||p.roomBoard)?`<div class="muted sub">${p.medLifetime?`${L.subLifetime} ${money(p.medLifetime)}`:''}${p.medLifetime&&p.roomBoard?'<br>':''}${p.roomBoard?`${L.subRB} ${money(p.roomBoard)}${L.perDay}`:''}</div>`:''}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
       <tfoot><tr><td>${L.total}</td>${AREAS.map(k=>`<td class="num nw">${money(c.areas.find(a=>a.key===k).have)}</td>`).join('')}<td class="num nw">${money(c.annual)}</td></tr></tfoot></table>
     </div>
 
@@ -1046,6 +1072,7 @@ function downloadTemplate(){
    ['Last Review Date','dd/mm/yyyy. Next review = +12 months.'],
    ['Policy No, Plan Name, Policy Type','From ePartner policy list.'],
    ['Life Cover / CI Cover / Medical Limit','Sum assured for each benefit. A policy can fill more than one column (e.g. life + CI rider).'],
+   ['Lifetime Limit, Room & Board','Medical card sub-limits: overall lifetime limit, and room & board per day. Medical Limit is the annual limit.'],
    ['Education/Savings Value, Retirement Value','Projected maturity / fund value earmarked for that goal.'],
    ['Premium + Frequency','Premium per payment, and Monthly / Quarterly / Half-yearly / Yearly / Single.'],
    ['Nominee, Nominee Relationship, Purpose','As recorded; update during review.'],
@@ -1084,7 +1111,9 @@ function sampleData(){
    P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','M2016-09982','MediShield Gold','Medical',0,0,2000000,0,0,260,'Monthly','Chan Siu Ming','Spouse','Hospital & surgical','2016-02-01','2050-02-01'),
    P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','E2017-03321','EduSaver 18','Endowment',60000,0,0,320000,0,15000,'Yearly','Chan Siu Ming','Spouse','Two children university fund','2017-05-01','2035-05-01'),
    P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','R2019-04450','RetireWell 60','Retirement',0,0,0,0,1600000,18000,'Yearly','Chan Siu Ming','Spouse','Retirement at 60','2019-09-01','2044-09-01'),
-  ];
+  ].map(p=>{p.medLifetime=0;p.roomBoard=0;return p}).map(p=>Object.assign(p,{   // medical sub-limits
+   'M2020-01877':{medLifetime:6000000,roomBoard:250},'M2012-05521':{medLifetime:3000000,roomBoard:150},
+   'M2018-04410':{medLifetime:5000000,roomBoard:200},'M2016-09982':{medLifetime:8000000,roomBoard:300}}[p.policyNo]||{}));
 }
 function loadSample(){if(dirty&&!confirm('Discard unsaved review changes?'))return;setData(sampleData().map(p=>({...p})));sampleLoaded=true;toast('Sample data loaded: 6 clients, 17 policies')}
 
