@@ -239,7 +239,9 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
       <label>Contact no.<input id="st-phone"></label>
       <label>Currency<input id="st-currency"></label>
       <label>Life cover target (× annual income)<input id="st-lifeMult" type="number" step="0.5"></label>
+      <label>Life cover minimum benchmark (amount)<input id="st-lifeMin" type="number" step="50000"></label>
       <label>Critical illness target (× annual income)<input id="st-ciMult" type="number" step="0.5"></label>
+      <label>Critical illness minimum benchmark (amount)<input id="st-ciMin" type="number" step="50000"></label>
       <label>Medical annual limit target (amount)<input id="st-medMin" type="number" step="10000"></label>
       <label>Education fund per dependant (amount)<input id="st-eduPerChild" type="number" step="10000"></label>
       <label>Retirement fund target (× annual income)<input id="st-retireMult" type="number" step="0.5"></label>
@@ -300,7 +302,7 @@ const hasCash=p=>!['Surrendered','Matured','Terminated','Proposed'].includes(p.s
 const FIELD_LABEL=Object.fromEntries(COLS.map(c=>[c[0],c[1]]));
 
 /* ================= state ================= */
-const DEFAULTS={advisor:'',branch:'',phone:'',currency:'RM',lifeMult:10,ciMult:5,medMin:1000000,eduPerChild:150000,retireMult:10};
+const DEFAULTS={advisor:'',branch:'',phone:'',currency:'RM',lifeMult:10,lifeMin:1000000,ciMult:5,ciMin:1000000,medMin:1000000,eduPerChild:150000,retireMult:10};
 let S=Object.assign({},DEFAULTS);
 try{Object.assign(S,JSON.parse(localStorage.getItem('cps-settings')||'{}'))}catch(e){}
 let policies=[];        // flat list of policy rows
@@ -608,7 +610,8 @@ function clients(){
 function analyse(c){
   const act=c.policies.filter(isActive);
   const inc=c.income||0;
-  const target={life:inc*S.lifeMult,ci:inc*S.ciMult,medical:+S.medMin,savings:S.eduPerChild*(c.dependants||0),retirement:inc*S.retireMult};
+  // life and CI: income multiple, but never below the minimum benchmark
+  const target={life:Math.max(inc*S.lifeMult,+S.lifeMin||0),ci:Math.max(inc*S.ciMult,+S.ciMin||0),medical:+S.medMin,savings:S.eduPerChild*(c.dependants||0),retirement:inc*S.retireMult};
   const areas=AREAS.map(k=>{
     const have=act.reduce((s,p)=>s+(p[k]||0),0),t=target[k];
     const pct=t>0?have/t:(have>0?1:null);
