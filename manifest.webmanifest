@@ -1,6 +1,6 @@
 {
-  "name": "Customer's Policy Summary Pro",
-  "short_name": "Policy Pro",
+  "name": "W2G Policy Summary Pro",
+  "short_name": "W2G Policy",
   "description": "Annual policy review dashboard and client report",
   "start_url": "./",
   "scope": "./",
