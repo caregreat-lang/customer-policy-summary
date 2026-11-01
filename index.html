@@ -125,6 +125,15 @@ body.dropping::after{content:"Drop Excel or PDF files to load them";position:fix
 .cov-edit input[type=date]{width:150px;text-align:left}
 .r-areas>.r-area{min-width:0}
 .r-area.wide{grid-column:1/-1}
+.medlim{margin-top:8px;display:grid;gap:8px}
+.ml-pol{border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff}
+.ml-plan{font-size:12px;font-weight:600;margin-bottom:6px;overflow-wrap:anywhere}
+.ml-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 10px}
+.ml-cell{min-width:0}
+.ml-cell span{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.ml-cell b{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media screen and (max-width:600px){.ml-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.pdf-stage .ml-grid{grid-template-columns:repeat(4,minmax(0,1fr))!important}
 .sublim{width:100%;margin-top:8px;border-collapse:collapse;font-size:12px}
 .sublim th{font-size:11px;font-weight:600;color:var(--muted);background:none;padding:3px 6px;border-bottom:1px solid var(--line)}
 .sublim td{padding:4px 6px;border-bottom:1px dashed var(--line)}
@@ -796,8 +805,10 @@ function medSubHtml(c,L){
   const list=c.policies.filter(p=>isActive(p)&&(p.medical||p.medLifetime||p.roomBoard||p.hospIncome));
   if(!list.length)return'';
   const m=v=>v?money(v):'—',day=v=>v?money(v)+L.perDay:'—';
-  return `<table class="sublim"><thead><tr><th></th><th class="num">${L.subAnnual}</th><th class="num">${L.subLifetime}</th><th class="num">${L.subRB}</th><th class="num">${L.subHI}</th></tr></thead><tbody>
-    ${list.map(p=>`<tr><td>${esc(p.plan||p.policyNo)}</td><td class="num nw">${m(p.medical)}</td><td class="num nw">${fmtLimit(p.medLifetime,L)}</td><td class="num nw">${day(p.roomBoard)}</td><td class="num nw">${day(p.hospIncome)}</td></tr>`).join('')}</tbody></table>`;
+  // label above each amount, so the columns always line up and wrap 2 × 2 on a phone
+  const cell=(lbl,val)=>`<div class="ml-cell"><span>${lbl}</span><b>${val}</b></div>`;
+  return `<div class="medlim">${list.map(p=>`<div class="ml-pol"><div class="ml-plan">${esc(p.plan||p.policyNo)}</div><div class="ml-grid">
+    ${cell(L.subAnnual,m(p.medical))}${cell(L.subLifetime,fmtLimit(p.medLifetime,L))}${cell(L.subRB,day(p.roomBoard))}${cell(L.subHI,day(p.hospIncome))}</div></div>`).join('')}</div>`;
 }
 // cash value per policy (only policies whose value still belongs to the client)
 function cashListHtml(c,L){
