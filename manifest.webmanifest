@@ -1,6 +1,6 @@
 {
-  "name": "Customer's Policy Summary",
-  "short_name": "Policy Summary",
+  "name": "Customer's Policy Summary Pro",
+  "short_name": "Policy Pro",
   "description": "Annual policy review dashboard and client report",
   "start_url": "./",
   "scope": "./",

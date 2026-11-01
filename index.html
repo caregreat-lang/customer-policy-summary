@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Customer's Policy Summary</title>
+<title>Customer's Policy Summary Pro</title>
 <meta name="theme-color" content="#1f4e8c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon-192.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Policy Summary">
+<meta name="apple-mobile-web-app-title" content="Policy Pro">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="xlsx.full.min.js"></script>
 <script>window.XLSX||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>')</script>
@@ -27,6 +27,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .topbar{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 20px;background:var(--brand);color:#fff;box-shadow:0 2px 8px rgba(0,0,0,.12)}
 .brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:17px;margin-right:auto;cursor:pointer}
 .brand small{display:block;font-weight:400;font-size:11.5px;opacity:.8}
+.pro{display:inline-block;background:#EF9F27;color:#412402;font-size:10.5px;font-weight:800;letter-spacing:.8px;padding:1px 6px;border-radius:4px;vertical-align:2px;margin-left:2px}
 .btn{border:1px solid var(--line);background:#fff;color:var(--ink);padding:7px 13px;border-radius:8px;cursor:pointer;white-space:nowrap}
 .btn:hover{border-color:var(--brand2)}
 .btn.primary{background:var(--brand2);border-color:var(--brand2);color:#fff}
@@ -218,8 +219,8 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
 
 <div class="topbar">
   <div class="brand" onclick="go('portfolio')">
-    <svg width="30" height="30" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#fff" opacity=".95"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#1f4e8c" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    <div>Customer's Policy Summary<small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
+    <svg width="36" height="36" viewBox="20 14 70 80" aria-hidden="true"><rect x="26" y="18" width="44" height="60" rx="6" fill="#fff"/><rect x="34" y="30" width="28" height="4" rx="2" fill="#85B7EB"/><rect x="34" y="40" width="22" height="4" rx="2" fill="#85B7EB"/><rect x="34" y="50" width="26" height="4" rx="2" fill="#85B7EB"/><path d="M70 56 L86 62 V73 C86 82 79 88 70 92 C61 88 54 82 54 73 V62 Z" fill="#1D9E75" stroke="#1f4e8c" stroke-width="3"/><path d="M63 74 L68 79 L77 69" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <div>Customer's Policy Summary <span class="pro">PRO</span><small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
   </div>
   <label class="btn primary" title="You can select several PDFs at once, or drag them onto the window">📂 Load Excel / PDF<input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" hidden></label>
   <button class="btn" onclick="loadSample()">Try sample data</button>
@@ -655,7 +656,7 @@ function render(){
 
 function renderEmpty(){
   $('#app').innerHTML=`<div class="empty">
-    <svg width="64" height="64" viewBox="0 0 24 24" fill="none"><path d="M12 2l8 3v6c0 5-3.4 9.4-8 11-4.6-1.6-8-6-8-11V5l8-3z" fill="#2f6fbf"/><path d="M8 12.5l2.6 2.6L16 9.7" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <svg width="72" height="72" viewBox="0 0 104 104" aria-hidden="true"><rect width="104" height="104" rx="22" fill="#1f4e8c"/><rect x="26" y="18" width="44" height="60" rx="6" fill="#fff"/><rect x="34" y="30" width="28" height="4" rx="2" fill="#85B7EB"/><rect x="34" y="40" width="22" height="4" rx="2" fill="#85B7EB"/><rect x="34" y="50" width="26" height="4" rx="2" fill="#85B7EB"/><path d="M70 56 L86 62 V73 C86 82 79 88 70 92 C61 88 54 82 54 73 V62 Z" fill="#1D9E75" stroke="#1f4e8c" stroke-width="3"/><path d="M63 74 L68 79 L77 69" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
     <h1>Help every client understand their coverage in one page</h1>
     <div class="muted">Load your ePartner policy export, review each client's protection gaps, update details live, then print a report they can keep.</div>
     <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
