@@ -3,14 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>W2G Policy Summary Pro</title>
+<title>Policy Review by W2G</title>
 <meta name="theme-color" content="#1f4e8c">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="app-icon.png">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="W2G Policy">
+<meta name="apple-mobile-web-app-title" content="Policy Review">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <script src="xlsx.full.min.js"></script>
 <script>window.XLSX||document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"><\/script>')</script>
@@ -229,7 +229,7 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
 <div class="topbar">
   <div class="brand" onclick="go('portfolio')">
     <img src="app-icon.png" width="40" height="40" alt="" style="display:block">
-    <div>W2G Policy Summary <span class="pro">PRO</span><small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
+    <div>Policy Review by W2G <span class="pro">PRO</span><small>Annual review: coverage, premium, nominee &amp; purpose</small></div>
   </div>
   <label class="btn primary" title="You can select several PDFs at once, or drag them onto the window">📂 Load Excel / PDF<input type="file" id="file" multiple accept=".xlsx,.xls,.csv,.pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv,application/pdf" hidden></label>
   <button class="btn" onclick="loadSample()">Try sample data</button>
@@ -670,7 +670,7 @@ function render(){
 
 function renderEmpty(){
   $('#app').innerHTML=`<div class="empty">
-    <img src="app-icon.png" width="120" height="120" alt="W2G Policy Summary Pro" style="display:block;margin:0 auto">
+    <img src="app-icon.png" width="120" height="120" alt="Policy Review by W2G" style="display:block;margin:0 auto">
     <h1>Help every client understand their coverage in one page</h1>
     <div class="muted">Load your ePartner policy export, review each client's protection gaps, update details live, then print a report they can keep.</div>
     <div style="margin-top:20px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
