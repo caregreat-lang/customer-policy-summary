@@ -75,6 +75,7 @@ tr.click:hover td{background:var(--soft)}
 .fill{height:100%;border-radius:6px}
 .fill.good{background:var(--good)} .fill.partial{background:var(--partial)} .fill.gap{background:var(--gap)} .fill.na{background:var(--na)}
 .cov .meta{font-size:12px;color:var(--muted);margin-top:3px}
+.cov .meta b{color:var(--ink);font-weight:700}
 /* stacked */
 .stack{display:flex;height:14px;border-radius:7px;overflow:hidden;background:#edf0f5}
 .stack div{height:100%}
@@ -881,7 +882,7 @@ function renderAnalysis(){
     <div class="card"><h2>Coverage vs recommended <span class="sub">overall protection score <b style="color:var(--brand)">${c.score}%</b></span></h2>
       ${c.areas.map(a=>`<div class="cov"><div class="top"><span class="name">${AREA_EN[a.key]} <button class="pen" title="Edit ${AREA_EN[a.key]} amount" onclick="view.editArea=view.editArea==='${a.key}'?null:'${a.key}';renderAnalysis()">${view.editArea===a.key?'✕ Close':'✏ Edit'}</button></span><span class="pill p-${a.status}">${a.pct===null?'N/A':Math.round(a.pct*100)+'%'}</span></div>
         <div class="track"><div class="fill ${a.status}" style="width:${a.pct===null?0:Math.min(a.pct,1)*100}%"></div></div>
-        <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div>
+        <div class="meta">Has <b>${money(a.have)}</b> · Target <b>${a.target?money(a.target):'not required'}</b>${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div>
         ${a.key==='medical'?medSubHtml(c,T.en):''}
         ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{
           const inp=(f,ph,lbl)=>`<span class="amt">${lbl?`<small>${lbl}</small>`:''}${esc(S.currency)} <input class="${changedCells.has(p._i+'|'+f)?'changed':''}" data-i="${p._i}" data-f="${f}" ${f==='medLifetime'?'list="lim-opts"':'inputmode="decimal"'} value="${esc(p[f]||'')}" placeholder="${ph}"></span>`;
