@@ -103,6 +103,10 @@ tr.click:hover td{background:var(--soft)}
 .prof-edit{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:6px}
 .prof-edit label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);gap:2px}
 .prof-edit input{padding:6px 8px;border:1px solid var(--brand2);border-radius:6px;font-weight:600;min-width:200px}
+.r-matrix td,.r-matrix th{font-size:11.5px;padding:5px 6px}
+.r-matrix tr.off td{opacity:.55}
+.r-matrix tfoot td{font-weight:700;background:var(--soft);color:var(--brand);border-top:2px solid var(--brand)}
+.r-count{font-weight:400;font-size:12px;color:var(--muted);margin-left:6px}
 .pdf-stage{position:absolute;left:-12000px;top:0;width:704px;background:#fff}
 .pdf-stage .report{width:704px!important;max-width:none!important;margin:0!important;padding:0!important;box-shadow:none!important;border:0!important}
 .pdf-stage .r-sec{overflow:visible!important}
@@ -857,6 +861,7 @@ const T={
 en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review date',preparedBy:'Prepared by',glance:'Your protection at a glance',score:'Overall protection score',scoreHint:'How close your current coverage is to the recommended level across all areas.',
  area_life:'Life / Death',area_ci:'Critical Illness',area_medical:'Medical / Hospital',area_savings:'Education / Savings',area_retirement:'Retirement',
  youHave:'You have',recommended:'Recommended',notRequired:'Not required',st_good:'Well covered',st_partial:'Partially covered',st_gap:'Gap: needs attention',st_na:'Not applicable',
+ combined:'All your policies combined',polCount:(n,a)=>`${n} polic${n===1?'y':'ies'} · ${a} active`,total:'Total protection (active policies)',notCounted:'not counted',annualCol:'Annual premium',details:'Policy details',
  policies:'Your policies',plan:'Plan',policyNo:'Policy no.',coverage:'Coverage',premium:'Premium',nominee:'Nominee',purpose:'Purpose',status:'Status',maturity:'Maturity',
  premSummary:'Premium summary',annualPrem:'Total annual premium',monthlyEq:'Monthly equivalent',ofIncome:'Share of annual income',
  changes:'Updated in this review',noChanges:'No changes were made in this review.',item:'Item',from:'Before',to:'After',
@@ -873,6 +878,7 @@ en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review 
 zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日期',preparedBy:'理财顾问',glance:'您的保障一览',score:'整体保障评分',scoreHint:'衡量您目前的保障与各项建议水平的接近程度。',
  area_life:'人寿 / 身故',area_ci:'重大疾病',area_medical:'医疗 / 住院',area_savings:'教育 / 储蓄',area_retirement:'退休',
  youHave:'现有',recommended:'建议',notRequired:'无需',st_good:'保障充足',st_partial:'部分保障',st_gap:'保障缺口 — 需关注',st_na:'不适用',
+ combined:'所有保单合并摘要',polCount:(n,a)=>`共 ${n} 份保单 · ${a} 份有效`,total:'总保障（有效保单）',notCounted:'不计入',annualCol:'年缴保费',details:'保单详情',
  policies:'您的保单',plan:'计划',policyNo:'保单号码',coverage:'保障',premium:'保费',nominee:'受益人',purpose:'投保目的',status:'状态',maturity:'满期日',
  premSummary:'保费摘要',annualPrem:'每年总保费',monthlyEq:'每月相当于',ofIncome:'占年收入比例',
  changes:'本次检视的更新',noChanges:'本次检视没有任何更改。',item:'项目',from:'更改前',to:'更改后',
@@ -889,6 +895,7 @@ zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日�
 ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'Tarikh semakan',preparedBy:'Disediakan oleh',glance:'Perlindungan anda sepintas lalu',score:'Skor perlindungan keseluruhan',scoreHint:'Sejauh mana perlindungan semasa anda menghampiri tahap yang disyorkan bagi semua bidang.',
  area_life:'Hayat / Kematian',area_ci:'Penyakit Kritikal',area_medical:'Perubatan / Hospital',area_savings:'Pendidikan / Simpanan',area_retirement:'Persaraan',
  youHave:'Anda ada',recommended:'Disyorkan',notRequired:'Tidak diperlukan',st_good:'Perlindungan mencukupi',st_partial:'Perlindungan separa',st_gap:'Jurang: perlu perhatian',st_na:'Tidak berkenaan',
+ combined:'Semua polisi anda digabungkan',polCount:(n,a)=>`${n} polisi · ${a} aktif`,total:'Jumlah perlindungan (polisi aktif)',notCounted:'tidak dikira',annualCol:'Premium tahunan',details:'Butiran polisi',
  policies:'Polisi anda',plan:'Pelan',policyNo:'No. polisi',coverage:'Perlindungan',premium:'Premium',nominee:'Penama',purpose:'Tujuan',status:'Status',maturity:'Matang',
  premSummary:'Ringkasan premium',annualPrem:'Jumlah premium tahunan',monthlyEq:'Bersamaan bulanan',ofIncome:'Bahagian pendapatan tahunan',
  changes:'Dikemas kini dalam semakan ini',noChanges:'Tiada perubahan dibuat dalam semakan ini.',item:'Perkara',from:'Sebelum',to:'Selepas',
@@ -935,7 +942,14 @@ function renderReport(){
         <div class="meta">${L.youHave}: <b>${money(a.have)}</b> · ${L.recommended}: <b>${a.target?money(a.target):L.notRequired}</b>${a.pct!==null?` · ${Math.round(a.pct*100)}%`:''}</div></div>`).join('')}</div>
     </div>
 
-    <div class="r-sec"><h2>${L.policies}</h2>
+    <div class="r-sec"><h2>${L.combined} <span class="r-count">${L.polCount(shown.length,shown.filter(isActive).length)}</span></h2>
+      <table class="r-table r-matrix"><thead><tr><th>${L.plan} / ${L.policyNo}</th>${AREAS.map(k=>`<th class="num">${L.cv[k]}</th>`).join('')}<th class="num">${L.annualCol}</th></tr></thead>
+      <tbody>${shown.map(p=>{const on=isActive(p);return `<tr class="${on?'':'off'}"><td><b>${esc(p.plan||'—')}</b><div class="muted nw">${esc(p.policyNo)} · ${p.status==='Proposed'?`<span class="tag-new">${L.stat.Proposed}</span>`:esc(L.stat[p.status]||p.status)}${on?'':` · ${L.notCounted}`}</div></td>
+        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
+      <tfoot><tr><td>${L.total}</td>${AREAS.map(k=>`<td class="num nw">${money(c.areas.find(a=>a.key===k).have)}</td>`).join('')}<td class="num nw">${money(c.annual)}</td></tr></tfoot></table>
+    </div>
+
+    <div class="r-sec"><h2>${L.details}</h2>
       <table class="r-table"><thead><tr><th>${L.plan}</th><th>${L.policyNo}</th><th>${L.coverage}</th><th class="num">${L.premium}</th><th>${L.nominee}</th><th>${L.purpose}</th><th>${L.status}</th></tr></thead>
       <tbody>${shown.map(p=>`<tr><td><b>${esc(p.plan||'—')}</b><div class="muted">${esc(p.type)}</div></td><td class="nw">${esc(p.policyNo)}</td><td>${covTxt(p)}</td>
         <td class="num nw">${money(p.premium)}<div class="muted">${L.freq[p.frequency]||''}</div></td>
