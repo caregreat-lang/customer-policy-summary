@@ -280,6 +280,8 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
 <script>
 /* ================= configuration ================= */
 const AREAS=['life','tpd','ci','medical','pa'];
+// TPD sum assured is the same as the life sum assured, unless a different TPD amount is entered for the policy
+const coverOf=(p,k)=>k==='tpd'?(p.tpd||p.life||0):(p[k]||0);
 const AREA_EN={life:'Life / Death',tpd:'Total Permanent Disability',ci:'Critical Illness',medical:'Medical / Hospital',pa:'Personal Accident'};
 const STATUSES=['Active','Proposed','Lapsed','Terminated','Surrendered','Matured'];
 const FREQS={Monthly:12,Quarterly:4,'Half-yearly':2,Yearly:1,Single:0};
@@ -649,7 +651,7 @@ function analyse(c){
   // life and CI: income multiple, but never below the minimum benchmark
   const target={life:Math.max(inc*S.lifeMult,+S.lifeMin||0),tpd:Math.max(inc*S.tpdMult,+S.tpdMin||0),ci:Math.max(inc*S.ciMult,+S.ciMin||0),medical:+S.medMin,pa:+S.paMin};
   const areas=AREAS.map(k=>{
-    const have=act.reduce((s,p)=>s+(p[k]||0),0),t=target[k];
+    const have=act.reduce((s,p)=>s+coverOf(p,k),0),t=target[k];
     const pct=t>0?have/t:(have>0?1:null);
     const status=pct===null?'na':pct>=1?'good':pct>=.5?'partial':'gap';
     return{key:k,have,target:t,pct,status,shortfall:Math.max(0,t-have)};
@@ -861,7 +863,8 @@ function mergeClient(fromId,toId,confirmed){
 function cellIn(p,f,cls=''){
   const ch=changedCells.has(p._i+'|'+f)?' changed':'';
   const v=NUM.has(f)?(p[f]||''):p[f];
-  const kind=f==='medLifetime'?'list="lim-opts" placeholder="amount or Unlimited"':NUM.has(f)?'inputmode="decimal"':'';
+  const kind=f==='medLifetime'?'list="lim-opts" placeholder="amount or Unlimited"'
+    :f==='tpd'?`inputmode="decimal" placeholder="${p.life?'= Life '+p.life.toLocaleString('en-MY'):''}"`:NUM.has(f)?'inputmode="decimal"':'';
   return `<td><input class="${cls}${ch}" data-i="${p._i}" data-f="${f}" value="${esc(v)}" ${kind}></td>`;
 }
 function cellSel(p,f,opts){
@@ -888,8 +891,8 @@ function renderAnalysis(){
         ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{
           const inp=(f,ph,lbl)=>`<span class="amt">${lbl?`<small>${lbl}</small>`:''}${esc(S.currency)} <input class="${changedCells.has(p._i+'|'+f)?'changed':''}" data-i="${p._i}" data-f="${f}" ${f==='medLifetime'?'list="lim-opts"':'inputmode="decimal"'} value="${esc(p[f]||'')}" placeholder="${ph}"></span>`;
           return `<label><span><b>${esc(p.plan||p.policyNo)}</b> <span class="muted">${esc(p.policyNo)}${p.status!=='Active'?' · '+esc(p.status):''}</span></span>
-          ${a.key==='medical'?`<span class="amt3">${inp('medical','0','Annual')}${inp('medLifetime','0 or Unlimited','Lifetime')}${inp('roomBoard','0','R&B / day')}${inp('hospIncome','0','Hospital income / day')}</span>`:inp(a.key,'0')}</label>`}).join('')}
-          <div class="muted" style="font-size:12px">Only Active policies count toward coverage. Changes are logged and shown on the client report.</div></div>`:''}</div>`).join('')}
+          ${a.key==='medical'?`<span class="amt3">${inp('medical','0','Annual')}${inp('medLifetime','0 or Unlimited','Lifetime')}${inp('roomBoard','0','R&B / day')}${inp('hospIncome','0','Hospital income / day')}</span>`:inp(a.key,a.key==='tpd'&&p.life?'Same as Life: '+p.life.toLocaleString('en-MY'):'0')}</label>`}).join('')}
+          <div class="muted" style="font-size:12px">${a.key==='tpd'?'TPD uses each policy\'s Life / Death sum assured. Enter an amount only if this policy\'s TPD is different; clear it to follow Life again. ':''}Only Active policies count toward coverage. Changes are logged and shown on the client report.</div></div>`:''}</div>`).join('')}
     </div>
     <div>
       <div class="card"><h2>Total cash value <button class="pen" title="Edit cash values" onclick="view.editArea=view.editArea==='cash'?null:'cash';renderAnalysis()">${view.editArea==='cash'?'✕ Close':'✏ Edit'}</button></h2>
@@ -932,7 +935,7 @@ document.addEventListener('change',e=>{
   changes.push({clientId:p.clientId,policyNo:p.policyNo,field:f,from:p[f],to:nv,at:new Date().toLocaleString('en-GB')});
   p[f]=nv;changedCells.add(p._i+'|'+f);t.classList.add('changed');dirty=true;
   if(NUM.has(f))t.value=nv||'';
-  if(t.closest('.cov-edit'))return renderClient();   // keep the policy table in step
+  if(t.closest('.cov-edit')||f==='life')return renderClient();   // keep the policy table (and the TPD "= Life" hint) in step
   renderAnalysis();renderLog();
 });
 document.addEventListener('input',e=>{if(e.target.id==='notes'){notes[view.clientId]=e.target.value;dirty=true}});
@@ -1021,7 +1024,7 @@ function renderReport(){
   const L=T[view.lang];
   const fv=(f,v)=>f==='status'?(L.stat[v]||v):f==='frequency'?(L.freq[v]||v):v===UNLIMITED?L.unlimited:fmtVal(f,v);
   const cl=changes.filter(x=>x.clientId===c.id);
-  const covTxt=p=>AREAS.filter(k=>p[k]).map(k=>`${L.cv[k]} ${money(p[k])}`)
+  const covTxt=p=>AREAS.filter(k=>coverOf(p,k)).map(k=>`${L.cv[k]} ${money(coverOf(p,k))}`)
     .concat(p.medLifetime?[`${L.subLifetime} ${fmtLimit(p.medLifetime,L)}`]:[],p.roomBoard?[`${L.subRB} ${money(p.roomBoard)}${L.perDay}`]:[],
       p.hospIncome?[`${L.subHI} ${money(p.hospIncome)}${L.perDay}`]:[]).join('<br>')||'—';
   const medSub=p=>[p.medLifetime&&`${L.subLifetime} ${fmtLimit(p.medLifetime,L)}`,p.roomBoard&&`${L.subRB} ${money(p.roomBoard)}${L.perDay}`,
@@ -1054,7 +1057,7 @@ function renderReport(){
     <div class="r-sec"><h2>${L.combined} <span class="r-count">${L.polCount(shown.length,shown.filter(isActive).length)}</span></h2>
       <table class="r-table r-matrix"><thead><tr><th>${L.plan} / ${L.policyNo}</th>${AREAS.map(k=>`<th class="num">${L.cv[k]}</th>`).join('')}<th class="num">${L.annualCol}</th></tr></thead>
       <tbody>${shown.map(p=>{const on=isActive(p);return `<tr class="${on?'':'off'}"><td><b>${esc(p.plan||'—')}</b><div class="muted nw">${esc(p.policyNo)} · ${p.status==='Proposed'?`<span class="tag-new">${L.stat.Proposed}</span>`:esc(L.stat[p.status]||p.status)}${on?'':` · ${L.notCounted}`}</div></td>
-        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}${k==='medical'&&medSub(p)?`<div class="muted sub">${medSub(p)}</div>`:''}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
+        ${AREAS.map(k=>`<td class="num nw">${coverOf(p,k)?money(coverOf(p,k)):'—'}${k==='medical'&&medSub(p)?`<div class="muted sub">${medSub(p)}</div>`:''}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
       <tfoot><tr><td>${L.total}</td>${AREAS.map(k=>`<td class="num nw">${money(c.areas.find(a=>a.key===k).have)}</td>`).join('')}<td class="num nw">${money(c.annual)}</td></tr></tfoot></table>
     </div>
 
@@ -1162,7 +1165,7 @@ function downloadTemplate(){
    ['Policy No, Plan Name, Policy Type','From ePartner policy list.'],
    ['Life Cover / CI Cover / Medical Limit','Sum assured for each benefit. A policy can fill more than one column (e.g. life + CI rider).'],
    ['Lifetime Limit, Room & Board, Hospital Income','Medical card sub-limits: overall lifetime limit (amount or "Unlimited"), room & board per day, and hospital income per day. Medical Limit is the annual limit.'],
-   ['TPD Cover','Total permanent disability sum assured. Target = TPD multiple × income, never below the TPD minimum (Settings).'],
+   ['TPD Cover','Leave blank: TPD is taken as the same as Life Cover. Enter an amount only if the policy\'s TPD differs. Target = TPD multiple × income, never below the TPD minimum (Settings).'],
    ['PA Cover','Personal accident sum assured. Target is set in Settings (default RM 500,000).'],
    ['Waiver of Premium','Yes or No. Leave blank if unknown. "No" on an active policy is flagged as an area to enhance.'],
    ['Cash Value, Cash Value As At','Net surrender value (or fund value for investment-linked plans) and its date, dd/mm/yyyy. Added up as the client\'s total cash value.'],
