@@ -227,6 +227,7 @@ textarea{width:100%;min-height:80px;border:1px solid var(--line);border-radius:8
 </div>
 
 <main id="app"></main>
+<datalist id="lim-opts"><option value="Unlimited"></datalist>
 
 <div class="modal" id="settings">
   <div class="box">
@@ -289,6 +290,11 @@ const COLS=[
  ['status','Status',['status','policystatus']],
 ];
 const NUM=new Set(['age','income','dependants','life','ci','medical','medLifetime','roomBoard','savings','retirement','premium','cashValue']);
+// a medical lifetime limit can be an amount or 'Unlimited'
+const UNLIMITED='Unlimited';
+function toLimit(v){return /unlimit|no\s*limit|tanpa\s*had|tiada\s*had|无限|無限|不设限/i.test(String(v??''))?UNLIMITED:toNum(v)}
+const numIn=(f,v)=>f==='medLifetime'?toLimit(v):toNum(v);
+const fmtLimit=(v,L)=>v===UNLIMITED?(L?.unlimited||UNLIMITED):v?money(v):'—';
 // policies whose cash value still belongs to the client (not paid out, not just proposed)
 const hasCash=p=>!['Surrendered','Matured','Terminated','Proposed'].includes(p.status);
 const FIELD_LABEL=Object.fromEntries(COLS.map(c=>[c[0],c[1]]));
@@ -344,7 +350,7 @@ function rowsToPolicies(rows){
   });
   return rows.map(r=>{
     const p={};COLS.forEach(c=>p[c[0]]=NUM.has(c[0])?0:'');
-    for(const h in r){const f=headerMap[h];if(!f)continue;p[f]=NUM.has(f)?toNum(r[h]):String(r[h]??'').trim()}
+    for(const h in r){const f=headerMap[h];if(!f)continue;p[f]=NUM.has(f)?numIn(f,r[h]):String(r[h]??'').trim()}
     p.lastReview=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='lastReview')]);
     p.start=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='start')]);
     p.maturity=toDate(r[Object.keys(headerMap).find(h=>headerMap[h]==='maturity')]);
@@ -775,7 +781,7 @@ function medSubHtml(c,L){
   if(!list.length)return'';
   const m=v=>v?money(v):'—';
   return `<table class="sublim"><thead><tr><th></th><th class="num">${L.subAnnual}</th><th class="num">${L.subLifetime}</th><th class="num">${L.subRB}</th></tr></thead><tbody>
-    ${list.map(p=>`<tr><td>${esc(p.plan||p.policyNo)}</td><td class="num nw">${m(p.medical)}</td><td class="num nw">${m(p.medLifetime)}</td><td class="num nw">${p.roomBoard?money(p.roomBoard)+L.perDay:'—'}</td></tr>`).join('')}</tbody></table>`;
+    ${list.map(p=>`<tr><td>${esc(p.plan||p.policyNo)}</td><td class="num nw">${m(p.medical)}</td><td class="num nw">${fmtLimit(p.medLifetime,L)}</td><td class="num nw">${p.roomBoard?money(p.roomBoard)+L.perDay:'—'}</td></tr>`).join('')}</tbody></table>`;
 }
 // cash value per policy (only policies whose value still belongs to the client)
 function cashListHtml(c,L){
@@ -813,7 +819,8 @@ function mergeClient(fromId,toId,confirmed){
 function cellIn(p,f,cls=''){
   const ch=changedCells.has(p._i+'|'+f)?' changed':'';
   const v=NUM.has(f)?(p[f]||''):p[f];
-  return `<td><input class="${cls}${ch}" data-i="${p._i}" data-f="${f}" value="${esc(v)}" ${NUM.has(f)?'inputmode="decimal"':''}></td>`;
+  const kind=f==='medLifetime'?'list="lim-opts" placeholder="amount or Unlimited"':NUM.has(f)?'inputmode="decimal"':'';
+  return `<td><input class="${cls}${ch}" data-i="${p._i}" data-f="${f}" value="${esc(v)}" ${kind}></td>`;
 }
 function cellSel(p,f,opts){
   const ch=changedCells.has(p._i+'|'+f)?' changed':'';
@@ -837,9 +844,9 @@ function renderAnalysis(){
         <div class="meta">Has ${money(a.have)} · Target ${a.target?money(a.target):'not required'}${a.shortfall?` · <b style="color:var(--gap)">Short ${money(a.shortfall)}</b>`:''}</div>
         ${a.key==='medical'?medSubHtml(c,T.en):''}
         ${view.editArea===a.key?`<div class="cov-edit">${c.policies.map(p=>{
-          const inp=(f,ph,lbl)=>`<span class="amt">${lbl?`<small>${lbl}</small>`:''}${esc(S.currency)} <input class="${changedCells.has(p._i+'|'+f)?'changed':''}" data-i="${p._i}" data-f="${f}" inputmode="decimal" value="${p[f]||''}" placeholder="${ph}"></span>`;
+          const inp=(f,ph,lbl)=>`<span class="amt">${lbl?`<small>${lbl}</small>`:''}${esc(S.currency)} <input class="${changedCells.has(p._i+'|'+f)?'changed':''}" data-i="${p._i}" data-f="${f}" ${f==='medLifetime'?'list="lim-opts"':'inputmode="decimal"'} value="${esc(p[f]||'')}" placeholder="${ph}"></span>`;
           return `<label><span><b>${esc(p.plan||p.policyNo)}</b> <span class="muted">${esc(p.policyNo)}${p.status!=='Active'?' · '+esc(p.status):''}</span></span>
-          ${a.key==='medical'?`<span class="amt3">${inp('medical','0','Annual')}${inp('medLifetime','0','Lifetime')}${inp('roomBoard','0','R&B / day')}</span>`:inp(a.key,'0')}</label>`}).join('')}
+          ${a.key==='medical'?`<span class="amt3">${inp('medical','0','Annual')}${inp('medLifetime','0 or Unlimited','Lifetime')}${inp('roomBoard','0','R&B / day')}</span>`:inp(a.key,'0')}</label>`}).join('')}
           <div class="muted" style="font-size:12px">Only Active policies count toward coverage. Changes are logged and shown on the client report.</div></div>`:''}</div>`).join('')}
     </div>
     <div>
@@ -866,7 +873,7 @@ function renderLog(){
   const list=changes.filter(x=>x.clientId===c.id);
   $('#cv-log').innerHTML=list.length?`<table class="log"><thead><tr><th>Policy</th><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>${list.map(x=>`<tr><td>${esc(x.policyNo)}</td><td>${esc(FIELD_LABEL[x.field]||x.field)}</td><td class="muted">${esc(fmtVal(x.field,x.from))}</td><td><b>${esc(fmtVal(x.field,x.to))}</b></td></tr>`).join('')}</tbody></table>`:'<div class="muted">No changes yet.</div>';
 }
-function fmtVal(f,v){if(f==='cashAsAt'||f==='lastReview')return fmtDate(v);if(NUM.has(f)&&f!=='age'&&f!=='dependants')return v===''||v===null?'—':money(v);return v===''||v==null?'—':v}
+function fmtVal(f,v){if(f==='cashAsAt'||f==='lastReview')return fmtDate(v);if(v===UNLIMITED)return UNLIMITED;if(NUM.has(f)&&f!=='age'&&f!=='dependants')return v===''||v===null?'—':money(v);return v===''||v==null?'—':v}
 
 // live editing
 document.addEventListener('change',e=>{
@@ -878,7 +885,7 @@ document.addEventListener('change',e=>{
   }
   if(t.dataset.i===undefined)return;
   const p=policies[+t.dataset.i],f=t.dataset.f;
-  const nv=NUM.has(f)?toNum(t.value):t.value.trim();
+  const nv=NUM.has(f)?numIn(f,t.value):t.value.trim();
   if(nv===p[f])return;
   changes.push({clientId:p.clientId,policyNo:p.policyNo,field:f,from:p[f],to:nv,at:new Date().toLocaleString('en-GB')});
   p[f]=nv;changedCells.add(p._i+'|'+f);t.classList.add('changed');dirty=true;
@@ -918,7 +925,7 @@ en:{title:'Policy Review Summary',preparedFor:'Prepared for',reviewDate:'Review 
  sigClient:'Client signature / date',sigAdvisor:'Advisor signature / date',none:'Not stated',
  disclaimer:'This summary is for discussion purposes only and is based on information available on the review date. Recommended levels are general guidelines, not financial advice; please refer to your policy contracts for full terms and conditions.',
  cashTitle:'Total cash value',cashHint:'What your policies are worth in cash today (surrender / fund value). This is savings, not protection.',asAt:'as at',cashCol:'Cash value',cashTotal:'Total cash value',
- subAnnual:'Annual limit',subLifetime:'Lifetime limit',subRB:'Room & board',perDay:'/day',
+ unlimited:'Unlimited',subAnnual:'Annual limit',subLifetime:'Lifetime limit',subRB:'Room & board',perDay:'/day',
  cv:{life:'Life',ci:'CI',medical:'Medical',savings:'Savings',retirement:'Retirement'},
  stat:{Active:'Active',Proposed:'Proposed',Lapsed:'Lapsed',Surrendered:'Surrendered',Matured:'Matured',Terminated:'Terminated'},
  freq:{Monthly:'monthly',Quarterly:'quarterly','Half-yearly':'half-yearly',Yearly:'yearly',Single:'single'},
@@ -937,7 +944,7 @@ zh:{title:'保单年度检视摘要',preparedFor:'客户',reviewDate:'检视日�
  sigClient:'客户签名 / 日期',sigAdvisor:'顾问签名 / 日期',none:'未填写',
  disclaimer:'本摘要仅供讨论用途，依据检视当日的资料编制。建议保障水平仅为一般参考，并非理财建议；完整条款与细则请以保单合约为准。',
  cashTitle:'总现金价值',cashHint:'您的保单目前的现金价值（退保价值／基金价值）。这是储蓄，不是保障。',asAt:'截至',cashCol:'现金价值',cashTotal:'总现金价值',
- subAnnual:'年度限额',subLifetime:'终身限额',subRB:'房租',perDay:'/天',
+ unlimited:'无限额',subAnnual:'年度限额',subLifetime:'终身限额',subRB:'房租',perDay:'/天',
  cv:{life:'寿险',ci:'重疾',medical:'医疗',savings:'储蓄',retirement:'退休'},
  stat:{Active:'有效',Proposed:'建议中',Lapsed:'已失效',Surrendered:'已退保',Matured:'已满期',Terminated:'已终止'},
  freq:{Monthly:'每月',Quarterly:'每季','Half-yearly':'每半年',Yearly:'每年',Single:'一次性'},
@@ -956,7 +963,7 @@ ms:{title:'Ringkasan Semakan Polisi',preparedFor:'Disediakan untuk',reviewDate:'
  sigClient:'Tandatangan pelanggan / tarikh',sigAdvisor:'Tandatangan perunding / tarikh',none:'Tiada',
  disclaimer:'Ringkasan ini untuk tujuan perbincangan sahaja dan berdasarkan maklumat pada tarikh semakan. Tahap yang disyorkan ialah panduan umum, bukan nasihat kewangan; sila rujuk kontrak polisi anda untuk terma dan syarat penuh.',
  cashTitle:'Jumlah nilai tunai',cashHint:'Nilai tunai polisi anda hari ini (nilai serahan / nilai dana). Ini simpanan, bukan perlindungan.',asAt:'pada',cashCol:'Nilai tunai',cashTotal:'Jumlah nilai tunai',
- subAnnual:'Had tahunan',subLifetime:'Had seumur hidup',subRB:'Bilik & makan',perDay:'/hari',
+ unlimited:'Tanpa had',subAnnual:'Had tahunan',subLifetime:'Had seumur hidup',subRB:'Bilik & makan',perDay:'/hari',
  cv:{life:'Hayat',ci:'PK',medical:'Perubatan',savings:'Simpanan',retirement:'Persaraan'},
  stat:{Active:'Aktif',Proposed:'Dicadangkan',Lapsed:'Luput',Surrendered:'Diserahkan',Matured:'Matang',Terminated:'Ditamatkan'},
  freq:{Monthly:'bulanan',Quarterly:'suku tahunan','Half-yearly':'separuh tahunan',Yearly:'tahunan',Single:'sekali bayar'},
@@ -970,10 +977,10 @@ function setLang(l){view.lang=l;renderReport()}
 function renderReport(){
   const c=getClient();if(!c)return go('portfolio');
   const L=T[view.lang];
-  const fv=(f,v)=>f==='status'?(L.stat[v]||v):f==='frequency'?(L.freq[v]||v):fmtVal(f,v);
+  const fv=(f,v)=>f==='status'?(L.stat[v]||v):f==='frequency'?(L.freq[v]||v):v===UNLIMITED?L.unlimited:fmtVal(f,v);
   const cl=changes.filter(x=>x.clientId===c.id);
   const covTxt=p=>AREAS.filter(k=>p[k]).map(k=>`${L.cv[k]} ${money(p[k])}`)
-    .concat(p.medLifetime?[`${L.subLifetime} ${money(p.medLifetime)}`]:[],p.roomBoard?[`${L.subRB} ${money(p.roomBoard)}${L.perDay}`]:[]).join('<br>')||'—';
+    .concat(p.medLifetime?[`${L.subLifetime} ${fmtLimit(p.medLifetime,L)}`]:[],p.roomBoard?[`${L.subRB} ${money(p.roomBoard)}${L.perDay}`]:[]).join('<br>')||'—';
   const shown=c.policies.filter(p=>p.status!=='Surrendered'&&p.status!=='Matured');
   $('#app').innerHTML=`
   <div class="rep-bar no-print">
@@ -1002,7 +1009,7 @@ function renderReport(){
     <div class="r-sec"><h2>${L.combined} <span class="r-count">${L.polCount(shown.length,shown.filter(isActive).length)}</span></h2>
       <table class="r-table r-matrix"><thead><tr><th>${L.plan} / ${L.policyNo}</th>${AREAS.map(k=>`<th class="num">${L.cv[k]}</th>`).join('')}<th class="num">${L.annualCol}</th></tr></thead>
       <tbody>${shown.map(p=>{const on=isActive(p);return `<tr class="${on?'':'off'}"><td><b>${esc(p.plan||'—')}</b><div class="muted nw">${esc(p.policyNo)} · ${p.status==='Proposed'?`<span class="tag-new">${L.stat.Proposed}</span>`:esc(L.stat[p.status]||p.status)}${on?'':` · ${L.notCounted}`}</div></td>
-        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}${k==='medical'&&(p.medLifetime||p.roomBoard)?`<div class="muted sub">${p.medLifetime?`${L.subLifetime} ${money(p.medLifetime)}`:''}${p.medLifetime&&p.roomBoard?'<br>':''}${p.roomBoard?`${L.subRB} ${money(p.roomBoard)}${L.perDay}`:''}</div>`:''}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
+        ${AREAS.map(k=>`<td class="num nw">${p[k]?money(p[k]):'—'}${k==='medical'&&(p.medLifetime||p.roomBoard)?`<div class="muted sub">${p.medLifetime?`${L.subLifetime} ${fmtLimit(p.medLifetime,L)}`:''}${p.medLifetime&&p.roomBoard?'<br>':''}${p.roomBoard?`${L.subRB} ${money(p.roomBoard)}${L.perDay}`:''}</div>`:''}</td>`).join('')}<td class="num nw">${annualPrem(p)?money(annualPrem(p)):'—'}</td></tr>`}).join('')}</tbody>
       <tfoot><tr><td>${L.total}</td>${AREAS.map(k=>`<td class="num nw">${money(c.areas.find(a=>a.key===k).have)}</td>`).join('')}<td class="num nw">${money(c.annual)}</td></tr></tfoot></table>
     </div>
 
@@ -1150,7 +1157,7 @@ function sampleData(){
    P('C1006','Wong Kar Yan',41,150000,2,'2025-11-25','R2019-04450','RetireWell 60','Retirement',0,0,0,0,1600000,18000,'Yearly','Chan Siu Ming','Spouse','Retirement at 60','2019-09-01','2044-09-01'),
   ].map(p=>{p.medLifetime=0;p.roomBoard=0;return p}).map(p=>Object.assign(p,{   // medical sub-limits
    'M2020-01877':{medLifetime:6000000,roomBoard:250},'M2012-05521':{medLifetime:3000000,roomBoard:150},
-   'M2018-04410':{medLifetime:5000000,roomBoard:200},'M2016-09982':{medLifetime:8000000,roomBoard:300}}[p.policyNo]||{}))
+   'M2018-04410':{medLifetime:5000000,roomBoard:200},'M2016-09982':{medLifetime:UNLIMITED,roomBoard:300}}[p.policyNo]||{}))
   .map(p=>Object.assign(p,{cashValue:0,cashAsAt:''},{   // cash (surrender / fund) values
    'L2018-00451':{cashValue:38500},'E2021-00932':{cashValue:31200},'L2010-11201':{cashValue:142000},'R2015-07743':{cashValue:156000},
    'E2016-00120':{cashValue:22400},'L2005-02234':{cashValue:118000},'R2008-01109':{cashValue:251000},'I2024-08812':{cashValue:4100},
