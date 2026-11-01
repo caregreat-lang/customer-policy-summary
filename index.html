@@ -567,7 +567,8 @@ async function fileToPolicies(f,buf){
   else if(isPdf(f))rows=await pdfToRows(buf);
   else{
     if(!window.XLSX)throw new Error('Excel reader could not load. Make sure xlsx.full.min.js is in the app folder, or save the sheet as CSV and load that instead.');
-    const wb=XLSX.read(buf,{cellDates:true});
+    // read dates as Excel day numbers (toDate converts them exactly); JS Date objects can shift a day with the time zone
+    const wb=XLSX.read(buf,{cellDates:false});
     const sheet=wb.Sheets[wb.SheetNames.find(n=>/polic/i.test(n))||wb.SheetNames[0]];
     rows=XLSX.utils.sheet_to_json(sheet,{defval:''});
   }
@@ -1144,20 +1145,121 @@ async function downloadReport(share){
 /* ================= export / template ================= */
 function sheetRows(list){return list.map(p=>Object.fromEntries(COLS.map(([f,h])=>[h,['lastReview','start','maturity','cashAsAt'].includes(f)?fmtDate(p[f]).replace('—',''):p[f]])))}
 function needXLSX(){if(!window.XLSX){alert('Excel library could not load. Make sure xlsx.full.min.js is in the same folder as this app.');return false}return true}
+const changeRows=()=>changes.map(x=>({'Client ID':x.clientId,'Policy No':x.policyNo,Field:FIELD_LABEL[x.field]||x.field,
+  Before:['lastReview','cashAsAt'].includes(x.field)?fmtDate(x.from):x.from,After:['lastReview','cashAsAt'].includes(x.field)?fmtDate(x.to):x.to,'Changed at':x.at}));
+const noteRowsOf=()=>Object.keys(notes).filter(k=>notes[k]).map(k=>({'Client ID':k,Notes:notes[k]}));
 function exportUpdated(){
   if(!policies.length)return toast('Load data first');
-  if(!needXLSX())return;
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(policies)),'Policies');
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(changes.length?changes.map(x=>({'Client ID':x.clientId,'Policy No':x.policyNo,Field:FIELD_LABEL[x.field]||x.field,Before:x.field==='lastReview'?fmtDate(x.from):x.from,After:x.field==='lastReview'?fmtDate(x.to):x.to,'Changed at':x.at})):[{Note:'No changes'}]),'Change Log');
-  const noteRows=Object.keys(notes).filter(k=>notes[k]).map(k=>({'Client ID':k,Notes:notes[k]}));
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(noteRows.length?noteRows:[{Note:'No notes'}]),'Review Notes');
-  XLSX.writeFile(wb,`Policy-Review-${today()}.xlsx`);dirty=false;toast('Updated Excel exported');
+  const name=`Policy-Review-${today()}.xlsx`;
+  writeStyledWorkbook(name,wb=>{
+    addPolicySheet(wb,policies);
+    addPlainSheet(wb,'Change Log',['Client ID','Policy No','Field','Before','After','Changed at'],changeRows(),[17,15,24,22,22,20],'No changes in this review');
+    addPlainSheet(wb,'Review Notes',['Client ID','Notes'],noteRowsOf(),[17,90],'No notes');
+  },()=>{   // plain export if the styling library can't load
+    if(!needXLSX())return false;
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(policies)),'Policies');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(changes.length?changeRows():[{Note:'No changes'}]),'Change Log');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(noteRowsOf().length?noteRowsOf():[{Note:'No notes'}]),'Review Notes');
+    XLSX.writeFile(wb,name);return true;
+  }).then(ok=>{if(ok){dirty=false;toast('Updated Excel exported')}});
+}
+
+/* ---------- styled Excel (app theme: navy #14263F, champagne gold #D6B779, soft grey #F6F7F9) ---------- */
+const XL={navy:'FF14263F',gold:'FFD6B779',goldSoft:'FFF7F1E3',grey:'FFF6F7F9',line:'FFE3E7EF',ink:'FF1B2333',muted:'FF677189',white:'FFFFFFFF'};
+const DATE_F=new Set(['lastReview','start','maturity','cashAsAt']);
+const KEY_F=new Set(['clientId','clientName','policyNo']);
+const COL_W={clientId:17,clientName:28,age:7,income:14,dependants:11,lastReview:13,policyNo:15,plan:30,type:17,waiver:11,
+  medLifetime:15,frequency:12,nominee:24,nomineeRel:16,purpose:30,start:12,maturity:13,cashAsAt:13,status:12};
+async function loadExcelJS(){
+  if(!window.ExcelJS){try{await loadScript('exceljs.min.js')}catch(e){await loadScript('https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js')}}
+  return window.ExcelJS;
+}
+const xlDate=iso=>{if(!iso)return null;const[y,m,d]=iso.split('-').map(Number);return new Date(Date.UTC(y,m-1,d))};   // UTC so Excel shows the same day
+function styleHeaderRow(row,keyCols){
+  row.height=32;
+  row.eachCell((c,i)=>{
+    const key=keyCols&&keyCols.has(i);
+    c.fill={type:'pattern',pattern:'solid',fgColor:{argb:key?XL.gold:XL.navy}};
+    c.font={bold:true,size:11,color:{argb:key?XL.navy:XL.white}};
+    c.alignment={vertical:'middle',horizontal:'center',wrapText:true};
+    c.border={bottom:{style:'medium',color:{argb:key?XL.navy:XL.gold}},right:{style:'thin',color:{argb:'FF2A3F5E'}}};
+  });
+}
+function styleBodyRows(ws,from){
+  for(let r=from;r<=ws.rowCount;r++){
+    const row=ws.getRow(r);row.height=20;
+    row.eachCell({includeEmpty:true},c=>{
+      c.fill={type:'pattern',pattern:'solid',fgColor:{argb:(r-from)%2?XL.grey:XL.white}};
+      c.font={size:10.5,color:{argb:XL.ink}};
+      c.border={bottom:{style:'thin',color:{argb:XL.line}}};
+      c.alignment=Object.assign({vertical:'middle'},c.alignment||{});
+    });
+  }
+}
+function addPolicySheet(wb,list){
+  const ws=wb.addWorksheet('Policies',{properties:{tabColor:{argb:XL.navy}},views:[{state:'frozen',xSplit:2,ySplit:1}]});
+  ws.columns=COLS.map(([f,h])=>({header:h,key:f,width:COL_W[f]||(NUM.has(f)?15:14)}));
+  list.forEach(p=>{const r={};COLS.forEach(([f])=>{let v=p[f];
+    if(DATE_F.has(f))v=xlDate(v);else if(NUM.has(f)&&v!==UNLIMITED)v=(v===''||v==null)?null:(+v||0);else v=v??'';r[f]=v});ws.addRow(r)});
+  const keyCols=new Set(COLS.map(([f],i)=>KEY_F.has(f)?i+1:0).filter(Boolean));
+  styleHeaderRow(ws.getRow(1),keyCols);
+  styleBodyRows(ws,2);
+  COLS.forEach(([f],i)=>{
+    const col=ws.getColumn(i+1);
+    if(DATE_F.has(f)){col.numFmt='dd/mm/yyyy';col.eachCell((c,r)=>{if(r>1)c.alignment={vertical:'middle',horizontal:'center'}})}
+    else if(NUM.has(f)){if(!['age','dependants'].includes(f))col.numFmt='#,##0';col.eachCell((c,r)=>{if(r>1)c.alignment={vertical:'middle',horizontal:'right'}})}
+    if(KEY_F.has(f))col.eachCell((c,r)=>{if(r>1)c.font={size:10.5,bold:true,color:{argb:XL.navy}}});
+  });
+  // drop-down lists, also on empty rows below so new policies can be added
+  const lists={frequency:Object.keys(FREQS),status:STATUSES,waiver:['Yes','No']};
+  const last=Math.max(ws.rowCount,1)+300;
+  COLS.forEach(([f],i)=>{if(!lists[f])return;const L=ws.getColumn(i+1).letter;
+    for(let r=2;r<=last;r++)ws.getCell(L+r).dataValidation={type:'list',allowBlank:true,formulae:['"'+lists[f].join(',')+'"'],
+      showErrorMessage:true,errorStyle:'warning',errorTitle:'Choose from the list',error:'Pick one of: '+lists[f].join(', ')}});
+  ws.autoFilter={from:{row:1,column:1},to:{row:1,column:COLS.length}};
+  return ws;
+}
+function addPlainSheet(wb,name,headers,rows,widths,emptyNote){
+  const ws=wb.addWorksheet(name,{properties:{tabColor:{argb:XL.gold}},views:[{state:'frozen',ySplit:1}]});
+  ws.columns=headers.map((h,i)=>({header:h,key:h,width:widths[i]||16}));
+  if(rows.length)rows.forEach(r=>ws.addRow(r));else ws.addRow({[headers[0]]:emptyNote});
+  styleHeaderRow(ws.getRow(1));styleBodyRows(ws,2);
+  ws.eachRow((row,r)=>{if(r>1)row.eachCell(c=>c.alignment={vertical:'top',wrapText:true})});
+  return ws;
+}
+function addInstructionsSheet(wb,help){
+  const ws=wb.addWorksheet('Instructions',{properties:{tabColor:{argb:XL.gold}}});
+  ws.columns=[{width:40},{width:100}];
+  ws.mergeCells('A1:B1');const t=ws.getCell('A1');t.value='Policy Review by W2G  ·  Excel template';
+  t.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL.navy}};t.font={bold:true,size:16,color:{argb:XL.gold}};t.alignment={vertical:'middle',indent:1};ws.getRow(1).height=36;
+  ws.mergeCells('A2:B2');const s=ws.getCell('A2');s.value='Fill in the Policies sheet (one row per policy), then load the file with  📂 Load Excel / PDF.';
+  s.fill={type:'pattern',pattern:'solid',fgColor:{argb:XL.goldSoft}};s.font={italic:true,size:11,color:{argb:XL.navy}};s.alignment={vertical:'middle',indent:1};ws.getRow(2).height=24;
+  ws.addRow([]);
+  const hr=ws.addRow(help[0]);styleHeaderRow(hr);
+  help.slice(1).forEach(r=>ws.addRow(r));
+  styleBodyRows(ws,5);
+  ws.eachRow((row,r)=>{if(r>4){row.height=undefined;row.getCell(1).font={bold:true,size:10.5,color:{argb:XL.navy}};
+    row.eachCell(c=>c.alignment={vertical:'top',wrapText:true})}});
+  return ws;
+}
+function saveBlob(blob,name){
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);
+}
+// build with ExcelJS (styled); fall back to the plain writer if it can't load
+async function writeStyledWorkbook(name,build,fallback){
+  let EJ=null;try{EJ=await loadExcelJS()}catch(e){}
+  if(!EJ)return fallback();
+  try{
+    const wb=new EJ.Workbook();wb.creator='Policy Review by W2G';wb.created=new Date();
+    build(wb);
+    const buf=await wb.xlsx.writeBuffer();
+    saveBlob(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}),name);
+    return true;
+  }catch(err){console.error(err);return fallback()}
 }
 function downloadTemplate(){
-  if(!needXLSX())return;
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(sampleData())),'Policies');
   const help=[['Column','What to enter'],
    ['Client ID','IC / CIF / client number. Rows with the same ID are grouped as one client.'],
    ['Client Name, Age, Annual Income, Dependants','Client profile. Income drives the Life and Critical Illness targets (minimum RM 1,000,000 each).'],
@@ -1171,10 +1273,16 @@ function downloadTemplate(){
    ['Cash Value, Cash Value As At','Net surrender value (or fund value for investment-linked plans) and its date, dd/mm/yyyy. Added up as the client\'s total cash value.'],
    ['Premium + Frequency','Premium per payment, and Monthly / Quarterly / Half-yearly / Yearly / Single.'],
    ['Nominee, Nominee Relationship, Purpose','As recorded; update during review.'],
-   ['Status','Active / Lapsed / Surrendered / Matured / Proposed.'],
-   ['Tip','Delete the sample rows and paste your ePartner export. Your own header names also work if they are common (e.g. "Sum Assured", "Beneficiary", "Payment Mode").']];
-  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(help),'Instructions');
-  XLSX.writeFile(wb,'Policy-Summary-Template.xlsx');
+   ['Status','Active / Lapsed / Terminated / Surrendered / Matured / Proposed (pick from the drop-down list).'],
+   ['Tip','Delete the sample rows and paste your ePartner export. Your own header names also work if they are common (e.g. "Sum Assured", "Beneficiary", "Payment Mode"). Keep the headings on row 1.']];
+  const name='Policy-Review-Template.xlsx';
+  writeStyledWorkbook(name,wb=>{addPolicySheet(wb,sampleData());addInstructionsSheet(wb,help)},()=>{
+    if(!needXLSX())return false;
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.json_to_sheet(sheetRows(sampleData())),'Policies');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(help),'Instructions');
+    XLSX.writeFile(wb,name);return true;
+  });
 }
 
 /* ================= settings ================= */
